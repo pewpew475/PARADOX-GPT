@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ParadoxGPT - Advanced AI Code Generation</title>
+    <meta name="description" content="ParadoxGPT - A distributed multi-agent code generation system">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Toggle Button -->
+        <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle sidebar">
+            <i class="fas fa-bars"></i>
+        </button>
+
+        <!-- Sidebar -->
+        <aside class="sidebar collapsed" id="sidebar" role="navigation" aria-label="Chat history">
+            <div class="sidebar-header">
+                <button class="new-chat-btn" id="newChatBtn" aria-label="Start new chat">
+                    <i class="fas fa-plus"></i>
+                    New Chat
+                </button>
+            </div>
+            <div class="chat-history" id="chatHistory">
+                <!-- Chat history items will be added here -->
+            </div>
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <div class="user-avatar">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div class="user-details">
+                        <div class="user-name">User</div>
+                        <div class="user-status">Online</div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content" role="main">
+            <div class="chat-container" id="chatContainer" role="log" aria-live="polite" aria-label="Conversation">
+                <div class="welcome-section">
+                    <div class="welcome-content">
+                        <div class="welcome-logo">
+                            <i class="fas fa-brain"></i>
+                        </div>
+                        <h1 class="welcome-title">ParadoxGPT</h1>
+                        <p class="welcome-subtitle">How can I help you today?</p>
+                    </div>
+                </div>
+                <!-- Chat messages will be added here -->
+            </div>
+
+            <div class="input-section">
+                <div class="input-container">
+                    <form class="chat-form" id="chatForm">
+                        <div class="input-wrapper">
+                            <textarea 
+                                class="message-input" 
+                                id="messageInput" 
+                                placeholder="Message ParadoxGPT..." 
+                                rows="1" 
+                                aria-label="Type your message"
+                                maxlength="4000"
+                            ></textarea>
+                            <button type="submit" class="send-btn" id="sendBtn" aria-label="Send message">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </form>
+                    <div class="input-footer">
+                        <p class="disclaimer">
+                            ParadoxGPT can make mistakes. Consider checking important information.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Loading Overlay -->
+        <div class="loading-overlay" id="loadingOverlay" role="status" aria-hidden="true">
+            <div class="loading-content">
+                <div class="loading-spinner">
+                    <div class="spinner-ring"></div>
+                    <div class="spinner-ring"></div>
+                    <div class="spinner-ring"></div>
+                </div>
+                <p class="loading-text">Processing your request...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- HTML Preview Modal -->
+    <div id="previewModal" class="preview-modal" role="dialog" aria-labelledby="previewTitle" aria-hidden="true">
+        <div class="preview-modal-content">
+            <div class="preview-header">
+                <h3 id="previewTitle" class="preview-title">
+                    <i class="fas fa-eye"></i>
+                    HTML Preview
+                </h3>
+                <div class="preview-controls">
+                    <button id="fullscreenBtn" class="preview-btn" title="Toggle fullscreen" aria-label="Toggle fullscreen">
+                        <i class="fas fa-expand"></i>
+                    </button>
+                    <button id="closePreviewBtn" class="preview-btn" title="Close preview" aria-label="Close preview">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="preview-body">
+                <iframe id="previewFrame" sandbox="allow-scripts allow-same-origin" title="HTML Preview"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

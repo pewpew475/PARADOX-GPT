@@ -206,6 +206,22 @@ def home():
         logger.info("Serving desktop template")
         return render_template('index.html', firebase_config=firebase_config, is_mobile=False)
 
+@app.route('/mobile')
+def mobile():
+    """Dedicated mobile route"""
+    firebase_config = {
+        'api_key': os.getenv('FIREBASE_WEB_API_KEY'),
+        'auth_domain': os.getenv('FIREBASE_WEB_AUTH_DOMAIN'),
+        'project_id': os.getenv('FIREBASE_WEB_PROJECT_ID'),
+        'storage_bucket': os.getenv('FIREBASE_WEB_STORAGE_BUCKET'),
+        'messaging_sender_id': os.getenv('FIREBASE_WEB_MESSAGING_SENDER_ID'),
+        'app_id': os.getenv('FIREBASE_WEB_APP_ID'),
+        'measurement_id': os.getenv('FIREBASE_WEB_MEASUREMENT_ID')
+    }
+
+    logger.info("Serving mobile template via /mobile route")
+    return render_template('mobile.html', firebase_config=firebase_config, is_mobile=True)
+
 @app.route('/debug')
 def debug_device():
     """Debug endpoint to check device detection"""
@@ -265,6 +281,191 @@ def debug_device():
     </body>
     </html>
     """
+
+@app.route('/mobile-content')
+def mobile_content():
+    """Serve just the mobile HTML content for dynamic loading"""
+    firebase_config = {
+        'api_key': os.getenv('FIREBASE_WEB_API_KEY'),
+        'auth_domain': os.getenv('FIREBASE_WEB_AUTH_DOMAIN'),
+        'project_id': os.getenv('FIREBASE_WEB_PROJECT_ID'),
+        'storage_bucket': os.getenv('FIREBASE_WEB_STORAGE_BUCKET'),
+        'messaging_sender_id': os.getenv('FIREBASE_WEB_MESSAGING_SENDER_ID'),
+        'app_id': os.getenv('FIREBASE_WEB_APP_ID'),
+        'measurement_id': os.getenv('FIREBASE_WEB_MEASUREMENT_ID')
+    }
+
+    # Return just the body content of mobile template
+    mobile_body = f"""
+    <!-- Mobile App Container -->
+    <div class="mobile-app">
+        <!-- Mobile Header -->
+        <header class="mobile-header">
+            <button class="menu-btn" id="menuBtn" aria-label="Menu">
+                <i class="fas fa-bars"></i>
+            </button>
+            <h1 class="app-title">ParadoxGPT</h1>
+            <button class="user-btn" id="userBtn" aria-label="User menu">
+                <i class="fas fa-user"></i>
+            </button>
+        </header>
+
+        <!-- Mobile Sidebar -->
+        <aside class="mobile-sidebar" id="mobileSidebar">
+            <div class="sidebar-header">
+                <h2>Chat History</h2>
+                <button class="close-sidebar" id="closeSidebar" aria-label="Close menu">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <button class="new-chat-mobile" id="newChatMobile">
+                <i class="fas fa-plus"></i>
+                New Chat
+            </button>
+
+            <div class="chat-history-mobile" id="chatHistoryMobile">
+                <!-- Chat history will be populated here -->
+            </div>
+
+            <div class="sidebar-footer-mobile">
+                <!-- User profile for mobile -->
+                <div id="userProfileMobile" class="user-profile-mobile" style="display: none;">
+                    <div class="user-avatar-mobile" id="userAvatarMobile"></div>
+                    <div class="user-info-mobile">
+                        <p class="user-name-mobile" id="userNameMobile"></p>
+                        <p class="user-email-mobile" id="userEmailMobile"></p>
+                    </div>
+                    <button id="logoutBtnMobile" class="logout-btn-mobile">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+
+                <!-- Login section for mobile -->
+                <div id="loginSectionMobile" class="login-section-mobile">
+                    <button id="loginBtnMobile" class="login-btn-mobile">
+                        <i class="fas fa-sign-in-alt"></i>
+                        Sign In to Save Chats
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Mobile Overlay -->
+        <div class="mobile-overlay" id="mobileOverlay"></div>
+
+        <!-- Main Chat Area -->
+        <main class="mobile-main">
+            <div class="chat-container-mobile" id="chatContainerMobile">
+                <!-- Welcome Screen -->
+                <div class="welcome-mobile" id="welcomeMobile">
+                    <div class="welcome-icon">
+                        <i class="fas fa-brain"></i>
+                    </div>
+                    <h2>Welcome to ParadoxGPT</h2>
+                    <p>Your AI coding assistant</p>
+                    <div class="quick-actions">
+                        <button class="quick-action" data-prompt="Help me write a Python function">
+                            <i class="fab fa-python"></i>
+                            Python Help
+                        </button>
+                        <button class="quick-action" data-prompt="Create a React component">
+                            <i class="fab fa-react"></i>
+                            React Code
+                        </button>
+                        <button class="quick-action" data-prompt="Debug my JavaScript code">
+                            <i class="fab fa-js"></i>
+                            Debug JS
+                        </button>
+                        <button class="quick-action" data-prompt="Explain this code">
+                            <i class="fas fa-question-circle"></i>
+                            Explain Code
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Messages will be added here -->
+            </div>
+        </main>
+
+        <!-- Mobile Input Area -->
+        <div class="mobile-input-area">
+            <form class="mobile-chat-form" id="mobileChatForm">
+                <div class="input-container-mobile">
+                    <textarea
+                        class="message-input-mobile"
+                        id="messageInputMobile"
+                        placeholder="Ask me anything..."
+                        rows="1"
+                        maxlength="4000"
+                    ></textarea>
+                    <button type="submit" class="send-btn-mobile" id="sendBtnMobile">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Mobile Loading -->
+        <div class="mobile-loading" id="mobileLoading">
+            <div class="loading-spinner-mobile">
+                <div class="spinner"></div>
+            </div>
+            <p>Thinking...</p>
+        </div>
+    </div>
+
+    <!-- Mobile Auth Modal -->
+    <div id="authModalMobile" class="auth-modal-mobile">
+        <div class="auth-content-mobile">
+            <div class="auth-header-mobile">
+                <h3>Sign In</h3>
+                <button class="auth-close-mobile" id="authCloseMobile">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="auth-body-mobile">
+                <!-- Auth content will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase Config Script -->
+    <script type="module">
+        import {{ initializeApp }} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import {{ getAuth }} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import {{ getFirestore }} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import {{ getAnalytics }} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics.js';
+
+        const firebaseConfig = {{
+            apiKey: "{firebase_config.get('api_key', 'your-api-key-here')}",
+            authDomain: "{firebase_config.get('auth_domain', 'your-project-id.firebaseapp.com')}",
+            projectId: "{firebase_config.get('project_id', 'your-project-id')}",
+            storageBucket: "{firebase_config.get('storage_bucket', 'your-project-id.appspot.com')}",
+            messagingSenderId: "{firebase_config.get('messaging_sender_id', 'your-sender-id')}",
+            appId: "{firebase_config.get('app_id', 'your-app-id')}",
+            measurementId: "{firebase_config.get('measurement_id', '')}"
+        }};
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        window.firebaseApp = app;
+        window.firebaseAuth = auth;
+        window.firebaseDb = db;
+        window.firebaseReady = true;
+        window.dispatchEvent(new CustomEvent('firebaseReady'));
+
+        try {{
+            window.firebaseAnalytics = getAnalytics(app);
+        }} catch (error) {{
+            console.log('Analytics not available:', error);
+        }}
+    </script>
+    """
+
+    return mobile_body
 
 @app.route('/api/chat', methods=['POST'])
 @optional_auth

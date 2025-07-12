@@ -43,34 +43,55 @@ app = Flask(__name__)
 
 def is_mobile_device(user_agent):
     """
-    Detect if the request is coming from a mobile device
+    Enhanced mobile device detection
     """
-    mobile_patterns = [
-        r'Mobile', r'Android', r'iPhone', r'iPad', r'iPod',
-        r'BlackBerry', r'Windows Phone', r'Opera Mini',
-        r'IEMobile', r'Mobile Safari', r'webOS', r'Kindle',
-        r'Silk', r'Opera Mobi', r'Fennec', r'Maemo',
-        r'Tablet', r'PlayBook', r'BB10'
-    ]
-
-    # Combine all patterns
-    mobile_regex = '|'.join(mobile_patterns)
-
-    # Check if user agent matches mobile patterns
-    if re.search(mobile_regex, user_agent, re.IGNORECASE):
-        return True
-
-    # Additional check for small screen devices
-    # This is a fallback for devices that might not match the patterns above
-    mobile_keywords = [
-        'mobi', 'mini', 'palm', 'phone', 'pocket', 'psp',
-        'symbian', 'smartphone', 'treo', 'up.browser',
-        'up.link', 'vodafone', 'wap', 'wireless'
-    ]
+    if not user_agent:
+        return False
 
     user_agent_lower = user_agent.lower()
+
+    # Primary mobile patterns - most reliable
+    primary_mobile_patterns = [
+        r'android.*mobile', r'iphone', r'ipod', r'blackberry',
+        r'windows phone', r'mobile.*safari', r'opera.*mini',
+        r'opera.*mobi', r'mobile.*firefox'
+    ]
+
+    # Check primary patterns first
+    for pattern in primary_mobile_patterns:
+        if re.search(pattern, user_agent_lower):
+            return True
+
+    # Tablet patterns (also considered mobile for our purposes)
+    tablet_patterns = [
+        r'ipad', r'android(?!.*mobile)', r'tablet', r'kindle',
+        r'silk', r'playbook', r'bb10'
+    ]
+
+    for pattern in tablet_patterns:
+        if re.search(pattern, user_agent_lower):
+            return True
+
+    # Additional mobile keywords
+    mobile_keywords = [
+        'mobile', 'phone', 'mobi', 'mini', 'palm', 'pocket',
+        'psp', 'symbian', 'smartphone', 'treo', 'up.browser',
+        'up.link', 'vodafone', 'wap', 'wireless', 'nokia',
+        'samsung', 'htc', 'lg', 'motorola', 'sony'
+    ]
+
+    # Check for mobile keywords
     for keyword in mobile_keywords:
         if keyword in user_agent_lower:
+            return True
+
+    # Check for specific mobile OS versions
+    mobile_os_patterns = [
+        r'android \d+\.\d+', r'ios \d+\.\d+', r'windows phone \d+\.\d+'
+    ]
+
+    for pattern in mobile_os_patterns:
+        if re.search(pattern, user_agent_lower):
             return True
 
     return False
@@ -145,18 +166,105 @@ def home():
         'measurement_id': os.getenv('FIREBASE_WEB_MEASUREMENT_ID')
     }
 
-    # Detect if request is from mobile device
-    user_agent = request.headers.get('User-Agent', '')
-    is_mobile = is_mobile_device(user_agent)
+    # Check for manual mobile override in URL parameters
+    force_mobile = request.args.get('mobile', '').lower() in ['true', '1', 'yes']
+    force_desktop = request.args.get('desktop', '').lower() in ['true', '1', 'yes']
 
-    # Log device detection for debugging
-    logger.info(f"Device detection - User Agent: {user_agent[:100]}... | Is Mobile: {is_mobile}")
+    # Get user agent and other headers for debugging
+    user_agent = request.headers.get('User-Agent', '')
+    accept_header = request.headers.get('Accept', '')
+
+    # Detect if request is from mobile device
+    is_mobile = False
+    detection_method = 'default'
+
+    if force_mobile:
+        is_mobile = True
+        detection_method = 'forced_mobile'
+    elif force_desktop:
+        is_mobile = False
+        detection_method = 'forced_desktop'
+    else:
+        is_mobile = is_mobile_device(user_agent)
+        detection_method = 'auto_detected'
+
+    # Enhanced logging for debugging
+    logger.info(f"=== Device Detection Debug ===")
+    logger.info(f"User Agent: {user_agent}")
+    logger.info(f"Accept Header: {accept_header}")
+    logger.info(f"Is Mobile: {is_mobile}")
+    logger.info(f"Detection Method: {detection_method}")
+    logger.info(f"Request Args: {dict(request.args)}")
+    logger.info(f"All Headers: {dict(request.headers)}")
+    logger.info(f"==============================")
 
     # Serve appropriate template based on device
     if is_mobile:
+        logger.info("Serving mobile template")
         return render_template('mobile.html', firebase_config=firebase_config, is_mobile=True)
     else:
+        logger.info("Serving desktop template")
         return render_template('index.html', firebase_config=firebase_config, is_mobile=False)
+
+@app.route('/debug')
+def debug_device():
+    """Debug endpoint to check device detection"""
+    user_agent = request.headers.get('User-Agent', '')
+    is_mobile = is_mobile_device(user_agent)
+
+    debug_info = {
+        'user_agent': user_agent,
+        'is_mobile_detected': is_mobile,
+        'all_headers': dict(request.headers),
+        'request_args': dict(request.args),
+        'mobile_url': request.url_root + '?mobile=true',
+        'desktop_url': request.url_root + '?desktop=true'
+    }
+
+    return f"""
+    <html>
+    <head>
+        <title>Device Detection Debug</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            body {{ font-family: Arial, sans-serif; margin: 20px; }}
+            .info {{ background: #f0f0f0; padding: 10px; margin: 10px 0; border-radius: 5px; }}
+            .mobile {{ background: #e8f5e8; }}
+            .desktop {{ background: #f5e8e8; }}
+            pre {{ background: #f8f8f8; padding: 10px; overflow-x: auto; }}
+            a {{ display: inline-block; margin: 5px; padding: 10px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; }}
+        </style>
+    </head>
+    <body>
+        <h1>Device Detection Debug</h1>
+        <div class="info {'mobile' if is_mobile else 'desktop'}">
+            <h2>Detection Result: {'MOBILE' if is_mobile else 'DESKTOP'}</h2>
+        </div>
+
+        <div class="info">
+            <h3>User Agent:</h3>
+            <pre>{user_agent}</pre>
+        </div>
+
+        <div class="info">
+            <h3>Test Links:</h3>
+            <a href="{debug_info['mobile_url']}">Force Mobile Version</a>
+            <a href="{debug_info['desktop_url']}">Force Desktop Version</a>
+            <a href="/">Auto Detect</a>
+        </div>
+
+        <div class="info">
+            <h3>All Request Headers:</h3>
+            <pre>{str(debug_info['all_headers'])}</pre>
+        </div>
+
+        <div class="info">
+            <h3>Request Arguments:</h3>
+            <pre>{str(debug_info['request_args'])}</pre>
+        </div>
+    </body>
+    </html>
+    """
 
 @app.route('/api/chat', methods=['POST'])
 @optional_auth

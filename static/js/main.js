@@ -2098,8 +2098,80 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.style.overflow = '';
     }
 
+    // Theme Toggle Functionality
+    function initializeThemeToggle() {
+        const themeToggle = document.getElementById('themeToggle');
+
+        if (!themeToggle) {
+            console.warn('Theme toggle button not found');
+            return;
+        }
+
+        // Load saved theme or default to light
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        setTheme(savedTheme);
+
+        // Add click event listener
+        themeToggle.addEventListener('click', toggleTheme);
+
+        // Add keyboard support
+        themeToggle.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleTheme();
+            }
+        });
+
+        console.log('Theme toggle initialized with theme:', savedTheme);
+    }
+
+    function toggleTheme() {
+        const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+        setTheme(newTheme);
+
+        // Add a subtle animation effect
+        const themeToggle = document.getElementById('themeToggle');
+        if (themeToggle) {
+            themeToggle.style.transform = 'scale(0.9)';
+            setTimeout(() => {
+                themeToggle.style.transform = '';
+            }, 150);
+        }
+    }
+
+    function setTheme(theme) {
+        // Set the theme attribute on the document element
+        document.documentElement.setAttribute('data-theme', theme);
+
+        // Save to localStorage
+        localStorage.setItem('theme', theme);
+
+        // Update the toggle button title
+        const themeToggle = document.getElementById('themeToggle');
+        if (themeToggle) {
+            const newTitle = theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode';
+            themeToggle.setAttribute('title', newTitle);
+            themeToggle.setAttribute('aria-label', `Toggle to ${theme === 'light' ? 'dark' : 'light'} mode`);
+        }
+
+        // Dispatch custom event for other components that might need to know about theme changes
+        window.dispatchEvent(new CustomEvent('themeChanged', {
+            detail: { theme }
+        }));
+
+        console.log('Theme set to:', theme);
+    }
+
+    // Expose theme functions globally for debugging
+    window.setTheme = setTheme;
+    window.toggleTheme = toggleTheme;
+
     // Initialize send button state
     updateSendButtonState();
+
+    // Initialize theme toggle
+    initializeThemeToggle();
 
     // Make functions globally available for debugging
     window.collectCodeBlocks = collectCodeBlocksFromConversation;
@@ -2181,5 +2253,27 @@ export default App;`;
         setTimeout(() => {
             URL.revokeObjectURL(url);
         }, 2000);
+    };
+
+    // Theme testing function
+    window.testThemeToggle = function() {
+        console.log('Testing theme toggle...');
+        console.log('Current theme:', document.documentElement.getAttribute('data-theme') || 'light');
+
+        // Test automatic toggling
+        setTimeout(() => {
+            console.log('Switching to dark mode...');
+            setTheme('dark');
+        }, 1000);
+
+        setTimeout(() => {
+            console.log('Switching to light mode...');
+            setTheme('light');
+        }, 3000);
+
+        setTimeout(() => {
+            console.log('Using toggle function...');
+            toggleTheme();
+        }, 5000);
     };
 });

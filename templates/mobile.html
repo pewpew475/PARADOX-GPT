@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ParadoxGPT">
+    <meta name="theme-color" content="#000000">
+    <title>ParadoxGPT - Mobile</title>
+    <meta name="description" content="ParadoxGPT - AI Code Generation for Mobile">
+    
+    <!-- Mobile-optimized CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getAnalytics } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics.js';
+
+        const firebaseConfig = {
+            apiKey: "{{ firebase_config.api_key | default('your-api-key-here') }}",
+            authDomain: "{{ firebase_config.auth_domain | default('your-project-id.firebaseapp.com') }}",
+            projectId: "{{ firebase_config.project_id | default('your-project-id') }}",
+            storageBucket: "{{ firebase_config.storage_bucket | default('your-project-id.appspot.com') }}",
+            messagingSenderId: "{{ firebase_config.messaging_sender_id | default('your-sender-id') }}",
+            appId: "{{ firebase_config.app_id | default('your-app-id') }}",
+            measurementId: "{{ firebase_config.measurement_id | default('') }}"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        window.firebaseApp = app;
+        window.firebaseAuth = auth;
+        window.firebaseDb = db;
+        window.firebaseReady = true;
+        window.dispatchEvent(new CustomEvent('firebaseReady'));
+
+        try {
+            window.firebaseAnalytics = getAnalytics(app);
+        } catch (error) {
+            console.log('Analytics not available:', error);
+        }
+    </script>
+</head>
+<body>
+    <!-- Mobile App Container -->
+    <div class="mobile-app">
+        <!-- Mobile Header -->
+        <header class="mobile-header">
+            <button class="menu-btn" id="menuBtn" aria-label="Menu">
+                <i class="fas fa-bars"></i>
+            </button>
+            <h1 class="app-title">ParadoxGPT</h1>
+            <button class="user-btn" id="userBtn" aria-label="User menu">
+                <i class="fas fa-user"></i>
+            </button>
+        </header>
+
+        <!-- Mobile Sidebar -->
+        <aside class="mobile-sidebar" id="mobileSidebar">
+            <div class="sidebar-header">
+                <h2>Chat History</h2>
+                <button class="close-sidebar" id="closeSidebar" aria-label="Close menu">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <button class="new-chat-mobile" id="newChatMobile">
+                <i class="fas fa-plus"></i>
+                New Chat
+            </button>
+            
+            <div class="chat-history-mobile" id="chatHistoryMobile">
+                <!-- Chat history will be populated here -->
+            </div>
+            
+            <div class="sidebar-footer-mobile">
+                <!-- User profile for mobile -->
+                <div id="userProfileMobile" class="user-profile-mobile" style="display: none;">
+                    <div class="user-avatar-mobile" id="userAvatarMobile"></div>
+                    <div class="user-info-mobile">
+                        <p class="user-name-mobile" id="userNameMobile"></p>
+                        <p class="user-email-mobile" id="userEmailMobile"></p>
+                    </div>
+                    <button id="logoutBtnMobile" class="logout-btn-mobile">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+                
+                <!-- Login section for mobile -->
+                <div id="loginSectionMobile" class="login-section-mobile">
+                    <button id="loginBtnMobile" class="login-btn-mobile">
+                        <i class="fas fa-sign-in-alt"></i>
+                        Sign In to Save Chats
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Mobile Overlay -->
+        <div class="mobile-overlay" id="mobileOverlay"></div>
+
+        <!-- Main Chat Area -->
+        <main class="mobile-main">
+            <div class="chat-container-mobile" id="chatContainerMobile">
+                <!-- Welcome Screen -->
+                <div class="welcome-mobile" id="welcomeMobile">
+                    <div class="welcome-icon">
+                        <i class="fas fa-brain"></i>
+                    </div>
+                    <h2>Welcome to ParadoxGPT</h2>
+                    <p>Your AI coding assistant</p>
+                    <div class="quick-actions">
+                        <button class="quick-action" data-prompt="Help me write a Python function">
+                            <i class="fab fa-python"></i>
+                            Python Help
+                        </button>
+                        <button class="quick-action" data-prompt="Create a React component">
+                            <i class="fab fa-react"></i>
+                            React Code
+                        </button>
+                        <button class="quick-action" data-prompt="Debug my JavaScript code">
+                            <i class="fab fa-js"></i>
+                            Debug JS
+                        </button>
+                        <button class="quick-action" data-prompt="Explain this code">
+                            <i class="fas fa-question-circle"></i>
+                            Explain Code
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Messages will be added here -->
+            </div>
+        </main>
+
+        <!-- Mobile Input Area -->
+        <div class="mobile-input-area">
+            <form class="mobile-chat-form" id="mobileChatForm">
+                <div class="input-container-mobile">
+                    <textarea 
+                        class="message-input-mobile" 
+                        id="messageInputMobile" 
+                        placeholder="Ask me anything..." 
+                        rows="1"
+                        maxlength="4000"
+                    ></textarea>
+                    <button type="submit" class="send-btn-mobile" id="sendBtnMobile">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Mobile Loading -->
+        <div class="mobile-loading" id="mobileLoading">
+            <div class="loading-spinner-mobile">
+                <div class="spinner"></div>
+            </div>
+            <p>Thinking...</p>
+        </div>
+    </div>
+
+    <!-- Mobile Auth Modal -->
+    <div id="authModalMobile" class="auth-modal-mobile">
+        <div class="auth-content-mobile">
+            <div class="auth-header-mobile">
+                <h3>Sign In</h3>
+                <button class="auth-close-mobile" id="authCloseMobile">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="auth-body-mobile">
+                <!-- Auth content will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+    <script src="{{ url_for('static', filename='js/mobile-firebase.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/mobile.js') }}"></script>
+</body>
+</html>

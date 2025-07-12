@@ -133,6 +133,11 @@ class FirebaseIntegration {
             loginSection.style.display = 'block';
             userProfile.style.display = 'none';
         }
+
+        // Update mobile login button visibility
+        if (window.updateMobileLoginButton) {
+            window.updateMobileLoginButton();
+        }
     }
 
     setupUIEventListeners() {
@@ -622,7 +627,7 @@ class FirebaseIntegration {
         // Add messages to chat
         conversation.forEach(chat => {
             if (window.addMessageToChat) {
-                window.addMessageToChat(chat.message, chat.isUser ? 'user' : 'assistant', { skipFirebase: true });
+                window.addMessageToChat(chat.message, chat.isUser ? 'user' : 'assistant', { skipFirebase: true, skipTypewriter: true });
             }
         });
     }
@@ -652,7 +657,7 @@ class FirebaseIntegration {
         // and optionally save to Firebase
         if (window.addMessageToChat) {
             const role = isUser ? 'user' : 'assistant';
-            const metadata = saveToFirebase ? null : { skipFirebase: true };
+            const metadata = saveToFirebase ? null : { skipFirebase: true, skipTypewriter: true };
             window.addMessageToChat(message, role, metadata);
         }
 

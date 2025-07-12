@@ -3,6 +3,7 @@ from orchestrator import ParadoxGPTOrchestrator
 import logging
 import sys
 import os
+import re
 from config import validate_api_keys
 from firebase_admin_config import verify_token, save_chat, get_user_chats, is_firebase_ready
 from functools import wraps
@@ -39,6 +40,40 @@ except Exception as e:
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+
+def is_mobile_device(user_agent):
+    """
+    Detect if the request is coming from a mobile device
+    """
+    mobile_patterns = [
+        r'Mobile', r'Android', r'iPhone', r'iPad', r'iPod',
+        r'BlackBerry', r'Windows Phone', r'Opera Mini',
+        r'IEMobile', r'Mobile Safari', r'webOS', r'Kindle',
+        r'Silk', r'Opera Mobi', r'Fennec', r'Maemo',
+        r'Tablet', r'PlayBook', r'BB10'
+    ]
+
+    # Combine all patterns
+    mobile_regex = '|'.join(mobile_patterns)
+
+    # Check if user agent matches mobile patterns
+    if re.search(mobile_regex, user_agent, re.IGNORECASE):
+        return True
+
+    # Additional check for small screen devices
+    # This is a fallback for devices that might not match the patterns above
+    mobile_keywords = [
+        'mobi', 'mini', 'palm', 'phone', 'pocket', 'psp',
+        'symbian', 'smartphone', 'treo', 'up.browser',
+        'up.link', 'vodafone', 'wap', 'wireless'
+    ]
+
+    user_agent_lower = user_agent.lower()
+    for keyword in mobile_keywords:
+        if keyword in user_agent_lower:
+            return True
+
+    return False
 
 # Authentication decorator
 def require_auth(f):
@@ -110,7 +145,18 @@ def home():
         'measurement_id': os.getenv('FIREBASE_WEB_MEASUREMENT_ID')
     }
 
-    return render_template('index.html', firebase_config=firebase_config)
+    # Detect if request is from mobile device
+    user_agent = request.headers.get('User-Agent', '')
+    is_mobile = is_mobile_device(user_agent)
+
+    # Log device detection for debugging
+    logger.info(f"Device detection - User Agent: {user_agent[:100]}... | Is Mobile: {is_mobile}")
+
+    # Serve appropriate template based on device
+    if is_mobile:
+        return render_template('mobile.html', firebase_config=firebase_config, is_mobile=True)
+    else:
+        return render_template('index.html', firebase_config=firebase_config, is_mobile=False)
 
 @app.route('/api/chat', methods=['POST'])
 @optional_auth

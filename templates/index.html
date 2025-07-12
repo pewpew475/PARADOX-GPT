@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>ParadoxGPT - Advanced AI Code Generation</title>
     <meta name="description" content="ParadoxGPT - A distributed multi-agent code generation system">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
@@ -114,6 +117,16 @@
                         </div>
                         <h1 class="welcome-title">ParadoxGPT</h1>
                         <p class="welcome-subtitle">How can I help you today?</p>
+
+                        <!-- Mobile Login Prompt -->
+                        <div class="mobile-login-prompt" id="mobileLoginPrompt">
+                            <h3>Sign in to save your conversations</h3>
+                            <p>Your chat history will be automatically saved and accessible across devices.</p>
+                            <button class="login-btn" onclick="document.getElementById('loginBtn').click()">
+                                <i class="fas fa-sign-in-alt"></i>
+                                Sign In
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <!-- Chat messages will be added here -->
@@ -144,6 +157,11 @@
                 </div>
             </div>
         </main>
+
+        <!-- Mobile Floating Login Button -->
+        <button class="mobile-login-fab" id="mobileLoginFab" aria-label="Sign In" style="display: none;">
+            <i class="fas fa-sign-in-alt"></i>
+        </button>
 
         <!-- Loading Overlay -->
         <div class="loading-overlay" id="loadingOverlay" role="status" aria-hidden="true">

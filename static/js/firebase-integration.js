@@ -720,3 +720,30 @@ window.forceCreateModal = function() {
         console.error('Firebase integration not available');
     }
 };
+
+// Add debugging functions
+window.checkChatHistory = function() {
+    console.log('=== Chat History Debug ===');
+    console.log('Current user:', window.firebaseIntegration?.currentUser?.email);
+    console.log('Chat history container:', document.getElementById('chatHistory'));
+    console.log('Chat history content:', document.getElementById('chatHistory')?.innerHTML);
+
+    if (window.firebaseIntegration?.currentUser) {
+        console.log('Manually triggering chat history load...');
+        window.firebaseIntegration.loadUserChats();
+    } else {
+        console.log('User not signed in');
+    }
+};
+
+window.testChatSave = function() {
+    if (window.firebaseIntegration?.currentUser) {
+        console.log('Testing chat save...');
+        window.firebaseIntegration.saveMessage('Test message from user', true);
+        setTimeout(() => {
+            window.firebaseIntegration.saveMessage('Test response from AI', false);
+        }, 1000);
+    } else {
+        console.log('User not signed in - cannot test chat save');
+    }
+};

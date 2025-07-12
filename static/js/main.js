@@ -301,6 +301,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Focus input
         focusInput();
+
+        // Note: We don't clear the sidebar history here - it should remain visible
+        // The sidebar shows past conversations, not the current one
     }
 
     function hideWelcomeSection() {

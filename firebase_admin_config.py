@@ -145,18 +145,38 @@ class FirebaseAdminService:
                 chat_data['id'] = doc.id
                 all_chats.append(chat_data)
 
-                logger.debug(f"Chat doc: {doc.id}, userId: {chat_data.get('userId')}, expiresAt: {chat_data.get('expiresAt')}")
+                logger.info(f"Chat doc: {doc.id}, userId: {chat_data.get('userId')}, expiresAt: {chat_data.get('expiresAt')}, type: {type(chat_data.get('expiresAt'))}")
 
                 # Filter out expired chats on the server side
                 if 'expiresAt' in chat_data:
                     expires_at = chat_data['expiresAt']
-                    if expires_at > now:
-                        valid_chats.append(chat_data)
-                        logger.debug(f"Chat {doc.id} is valid (expires: {expires_at})")
+                    logger.info(f"Comparing: expires_at={expires_at} (type: {type(expires_at)}) > now={now} (type: {type(now)})")
+
+                    # Handle different timestamp formats
+                    if hasattr(expires_at, 'timestamp'):
+                        # Firestore timestamp object
+                        expires_datetime = expires_at.timestamp()
+                        now_timestamp = now.timestamp()
+                        is_valid = expires_datetime > now_timestamp
+                        logger.info(f"Firestore timestamp comparison: {expires_datetime} > {now_timestamp} = {is_valid}")
+                    elif isinstance(expires_at, datetime):
+                        # Python datetime object
+                        is_valid = expires_at > now
+                        logger.info(f"Datetime comparison: {expires_at} > {now} = {is_valid}")
                     else:
-                        logger.debug(f"Chat {doc.id} is expired (expires: {expires_at})")
+                        # Unknown format, assume valid for debugging
+                        logger.warning(f"Unknown expiresAt format: {type(expires_at)}, assuming valid")
+                        is_valid = True
+
+                    if is_valid:
+                        valid_chats.append(chat_data)
+                        logger.info(f"Chat {doc.id} is valid")
+                    else:
+                        logger.info(f"Chat {doc.id} is expired")
                 else:
                     logger.warning(f"Chat {doc.id} has no expiresAt field")
+                    # Include chats without expiresAt for debugging
+                    valid_chats.append(chat_data)
 
             logger.info(f"Found {len(all_chats)} total chats, {len(valid_chats)} valid chats")
 

@@ -180,14 +180,19 @@ def verify_auth():
         logger.error(f"Error verifying auth: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/chats', methods=['GET'])
+@app.route('/api/chat/history', methods=['GET'])
 @require_auth
-def get_chats():
+def get_chat_history():
     """Get user's chat history"""
     try:
+        limit = request.args.get('limit', 50, type=int)
         user_id = request.user['uid']
-        chats = get_user_chats(user_id)
-        return jsonify({'success': True, 'chats': chats})
+        chats = get_user_chats(user_id, limit)
+        return jsonify({
+            'success': True,
+            'chats': chats,
+            'count': len(chats)
+        })
     except Exception as e:
         logger.error(f"Error getting chats: {str(e)}")
         return jsonify({'error': str(e)}), 500

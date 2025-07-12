@@ -439,39 +439,43 @@ class FirebaseIntegration {
 
     async loadUserChats() {
         if (!this.currentUser) {
+            console.log('No current user, skipping chat history load');
             return;
         }
 
+        console.log('Loading chat history for user:', this.currentUser.email);
+
+        // For now, let's disable the complex Firestore query that requires indexes
+        // and implement a simpler approach using the REST API or a different method
+
         try {
-            const { collection, query, where, orderBy, onSnapshot, Timestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
-
-            // Use a simpler query that doesn't require a composite index
-            const q = query(
-                collection(this.db, 'chats'),
-                where('userId', '==', this.currentUser.uid),
-                orderBy('timestamp', 'desc')
-            );
-
-            this.chatUnsubscribe = onSnapshot(q, (querySnapshot) => {
-                const chats = [];
-                const now = Timestamp.now();
-
-                querySnapshot.forEach((doc) => {
-                    const data = doc.data();
-                    // Filter out expired chats on the client side
-                    if (data.expiresAt && data.expiresAt.toMillis() > now.toMillis()) {
-                        chats.push({
-                            id: doc.id,
-                            ...data
-                        });
-                    }
-                });
-
-                console.log(`Loaded ${chats.length} valid chats (filtered from ${querySnapshot.size} total)`);
-                this.populateChatHistory(chats);
+            // Try to use the backend API to get chats instead of direct Firestore queries
+            const token = await this.currentUser.getIdToken();
+            const response = await fetch('/api/chat/history', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
             });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.chats) {
+                    console.log(`Loaded ${data.chats.length} chats from backend`);
+                    this.populateChatHistory(data.chats);
+                } else {
+                    console.log('No chats found or error from backend');
+                    this.populateChatHistory([]);
+                }
+            } else {
+                console.error('Failed to load chats from backend:', response.status);
+                this.populateChatHistory([]);
+            }
         } catch (error) {
-            console.error('Error loading chats:', error);
+            console.error('Error loading chats from backend:', error);
+            // Fallback: show empty history
+            this.populateChatHistory([]);
         }
     }
 
@@ -751,5 +755,58 @@ window.testChatSave = function() {
         }, 1000);
     } else {
         console.log('User not signed in - cannot test chat save');
+    }
+};
+
+// Test basic Firestore connectivity
+window.testFirestore = async function() {
+    console.log('=== Firestore Connectivity Test ===');
+
+    if (!window.firebaseIntegration?.currentUser) {
+        console.log('❌ User not signed in');
+        return;
+    }
+
+    try {
+        const { collection, addDoc, getDocs, query, where, Timestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+        const db = window.firebaseDb;
+        const user = window.firebaseIntegration.currentUser;
+
+        console.log('✅ Firebase modules loaded');
+        console.log('✅ User authenticated:', user.email);
+
+        // Test 1: Try to write a simple document
+        console.log('📝 Testing write permissions...');
+        const testDoc = {
+            userId: user.uid,
+            message: 'Test connectivity',
+            timestamp: Timestamp.now(),
+            isUser: true,
+            expiresAt: Timestamp.fromMillis(Date.now() + 6 * 60 * 60 * 1000) // 6 hours from now
+        };
+
+        const docRef = await addDoc(collection(db, 'chats'), testDoc);
+        console.log('✅ Write successful, document ID:', docRef.id);
+
+        // Test 2: Try to read documents
+        console.log('📖 Testing read permissions...');
+        const q = query(collection(db, 'chats'), where('userId', '==', user.uid));
+        const querySnapshot = await getDocs(q);
+        console.log('✅ Read successful, found', querySnapshot.size, 'documents');
+
+        // Test 3: Try the problematic query
+        console.log('🔍 Testing the chat history query...');
+        window.firebaseIntegration.loadUserChats();
+
+    } catch (error) {
+        console.error('❌ Firestore test failed:', error);
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
+
+        if (error.code === 'permission-denied') {
+            console.log('🔒 This is a permissions issue. Check your Firestore security rules.');
+        } else if (error.code === 'failed-precondition') {
+            console.log('📊 This is an index issue. You need to create the required index.');
+        }
     }
 };

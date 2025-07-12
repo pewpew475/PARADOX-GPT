@@ -450,7 +450,10 @@ class FirebaseIntegration {
 
         try {
             // Try to use the backend API to get chats instead of direct Firestore queries
+            console.log('Getting ID token...');
             const token = await this.currentUser.getIdToken();
+            console.log('Token obtained, making API request...');
+
             const response = await fetch('/api/chat/history', {
                 method: 'GET',
                 headers: {
@@ -459,17 +462,24 @@ class FirebaseIntegration {
                 }
             });
 
+            console.log('API response status:', response.status);
+            console.log('API response ok:', response.ok);
+
             if (response.ok) {
                 const data = await response.json();
+                console.log('API response data:', data);
+
                 if (data.success && data.chats) {
                     console.log(`Loaded ${data.chats.length} chats from backend`);
+                    console.log('Sample chat data:', data.chats.slice(0, 2)); // Show first 2 chats
                     this.populateChatHistory(data.chats);
                 } else {
-                    console.log('No chats found or error from backend');
+                    console.log('No chats found or error from backend:', data);
                     this.populateChatHistory([]);
                 }
             } else {
-                console.error('Failed to load chats from backend:', response.status);
+                const errorText = await response.text();
+                console.error('Failed to load chats from backend:', response.status, errorText);
                 this.populateChatHistory([]);
             }
         } catch (error) {
@@ -755,6 +765,44 @@ window.testChatSave = function() {
         }, 1000);
     } else {
         console.log('User not signed in - cannot test chat save');
+    }
+};
+
+// Test the API endpoint directly
+window.testChatAPI = async function() {
+    if (!window.firebaseIntegration?.currentUser) {
+        console.log('User not signed in');
+        return;
+    }
+
+    try {
+        console.log('=== Testing Chat History API ===');
+        const token = await window.firebaseIntegration.currentUser.getIdToken();
+        console.log('Token length:', token.length);
+
+        const response = await fetch('/api/chat/history', {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        console.log('Response status:', response.status);
+        console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
+        const text = await response.text();
+        console.log('Raw response:', text);
+
+        try {
+            const data = JSON.parse(text);
+            console.log('Parsed response:', data);
+        } catch (e) {
+            console.log('Response is not JSON');
+        }
+
+    } catch (error) {
+        console.error('API test failed:', error);
     }
 };
 

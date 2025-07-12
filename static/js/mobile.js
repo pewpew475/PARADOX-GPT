@@ -81,6 +81,27 @@ class MobileParadoxGPT {
         window.addEventListener('orientationchange', () => {
             setTimeout(() => this.handleViewportChange(), 500);
         });
+
+        // Preview modal controls
+        const closePreviewBtn = document.getElementById('closePreviewBtnMobile');
+        const fullscreenBtn = document.getElementById('fullscreenBtnMobile');
+        const previewModal = document.getElementById('previewModalMobile');
+
+        if (closePreviewBtn) {
+            closePreviewBtn.addEventListener('click', () => this.closePreview());
+        }
+
+        if (fullscreenBtn) {
+            fullscreenBtn.addEventListener('click', () => this.toggleFullscreen());
+        }
+
+        if (previewModal) {
+            previewModal.addEventListener('click', (e) => {
+                if (e.target === previewModal) {
+                    this.closePreview();
+                }
+            });
+        }
     }
     
     setupTouchGestures() {
@@ -472,10 +493,50 @@ class MobileParadoxGPT {
     }
 
     processCodeBlocks(content) {
-        // Simple code block processing for mobile
+        // Enhanced code block processing for mobile with controls
         return content.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
             const language = lang || 'text';
-            return `<pre><code class="language-${language}">${this.escapeHtml(code.trim())}</code></pre>`;
+            const codeId = 'code-' + Math.random().toString(36).substr(2, 9);
+            const escapedCode = this.escapeHtml(code.trim());
+
+            // Check if it's HTML code
+            const isHTML = language === 'html' || language === 'xml' ||
+                          code.trim().startsWith('<!DOCTYPE') ||
+                          code.includes('<html') ||
+                          (code.includes('<div') && code.includes('<style'));
+
+            // Check if it's CSS or JavaScript that could be part of a web project
+            const isWebCode = language === 'css' || language === 'javascript' || language === 'js';
+
+            let controls = `
+                <div class="code-controls-mobile">
+                    <button onclick="window.mobileApp.copyCode('${codeId}')" title="Copy code">
+                        <i class="fas fa-copy"></i> Copy
+                    </button>
+            `;
+
+            if (isHTML) {
+                controls += `
+                    <button class="preview-button-mobile" onclick="window.mobileApp.showCodePreview('${codeId}')" title="Preview HTML">
+                        <i class="fas fa-eye"></i> Preview
+                    </button>
+                `;
+            } else if (isWebCode) {
+                controls += `
+                    <button class="preview-button-mobile" onclick="window.mobileApp.showCodePreview('${codeId}', true)" title="Run with other code">
+                        <i class="fas fa-play"></i> Run All
+                    </button>
+                `;
+            }
+
+            controls += '</div>';
+
+            return `
+                <div class="code-block-container-mobile">
+                    ${controls}
+                    <pre><code id="${codeId}" class="language-${language}">${escapedCode}</code></pre>
+                </div>
+            `;
         });
     }
 
@@ -569,6 +630,279 @@ class MobileParadoxGPT {
         this.startNewChat();
     }
 
+    // Code review functionality
+    copyCode(codeId) {
+        const codeElement = document.getElementById(codeId);
+        if (!codeElement) return;
+
+        const code = codeElement.textContent;
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(code).then(() => {
+                this.showToast('Code copied to clipboard!');
+            }).catch(() => {
+                this.fallbackCopyCode(code);
+            });
+        } else {
+            this.fallbackCopyCode(code);
+        }
+    }
+
+    fallbackCopyCode(code) {
+        const textArea = document.createElement('textarea');
+        textArea.value = code;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+
+        try {
+            document.execCommand('copy');
+            this.showToast('Code copied to clipboard!');
+        } catch (err) {
+            this.showToast('Failed to copy code');
+        }
+
+        document.body.removeChild(textArea);
+    }
+
+    showCodePreview(codeId, combineAll = false) {
+        const codeElement = document.getElementById(codeId);
+        if (!codeElement) return;
+
+        let htmlContent;
+
+        if (combineAll) {
+            // Collect all code blocks from the current message
+            const messageElement = codeElement.closest('.message-mobile');
+            htmlContent = this.createMergedHTMLFromMessage(messageElement, codeElement);
+        } else {
+            // Use just this code block
+            htmlContent = codeElement.textContent.trim();
+        }
+
+        this.showHTMLPreview(htmlContent);
+    }
+
+    createMergedHTMLFromMessage(messageElement, triggerCodeBlock) {
+        if (!messageElement) return triggerCodeBlock.textContent.trim();
+
+        const codeBlocks = {
+            html: [],
+            css: [],
+            javascript: [],
+            other: []
+        };
+
+        // Collect all code blocks from the message
+        messageElement.querySelectorAll('code').forEach(code => {
+            const content = code.textContent.trim();
+            const language = this.detectLanguageFromCode(code);
+
+            switch (language) {
+                case 'html':
+                case 'xml':
+                    codeBlocks.html.push(content);
+                    break;
+                case 'css':
+                    codeBlocks.css.push(content);
+                    break;
+                case 'javascript':
+                case 'js':
+                    codeBlocks.javascript.push(content);
+                    break;
+                default:
+                    codeBlocks.other.push(content);
+            }
+        });
+
+        return this.createMergedHTMLDocument(codeBlocks, triggerCodeBlock.textContent.trim());
+    }
+
+    detectLanguageFromCode(codeElement) {
+        // Check class names for language
+        const classes = Array.from(codeElement.classList);
+        for (const cls of classes) {
+            if (cls.startsWith('language-')) {
+                return cls.replace('language-', '');
+            }
+        }
+
+        const content = codeElement.textContent.trim();
+
+        // HTML detection
+        if (content.includes('<!DOCTYPE') || content.includes('<html') ||
+            (content.includes('<div') && content.includes('<style'))) {
+            return 'html';
+        }
+
+        // CSS detection
+        if (content.includes('{') && content.includes('}') &&
+            (content.includes(':') || content.includes('selector'))) {
+            return 'css';
+        }
+
+        // JavaScript detection
+        if (content.includes('function') || content.includes('const ') ||
+            content.includes('let ') || content.includes('var ') ||
+            content.includes('console.log')) {
+            return 'javascript';
+        }
+
+        return 'other';
+    }
+
+    createMergedHTMLDocument(codeBlocks, triggerContent) {
+        // If trigger is a complete HTML document, use it as base
+        if (triggerContent.includes('<!DOCTYPE') || triggerContent.includes('<html')) {
+            return triggerContent;
+        }
+
+        // Build a complete HTML document
+        let html = '<!DOCTYPE html>\n<html lang="en">\n<head>\n';
+        html += '<meta charset="UTF-8">\n';
+        html += '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n';
+        html += '<title>Code Preview</title>\n';
+
+        // Add CSS
+        if (codeBlocks.css.length > 0) {
+            html += '<style>\n';
+            codeBlocks.css.forEach(css => {
+                html += css + '\n';
+            });
+            html += '</style>\n';
+        }
+
+        html += '</head>\n<body>\n';
+
+        // Add HTML content
+        if (codeBlocks.html.length > 0) {
+            codeBlocks.html.forEach(htmlContent => {
+                html += htmlContent + '\n';
+            });
+        } else if (triggerContent && !triggerContent.includes('function') && !triggerContent.includes('{')) {
+            // If trigger is not CSS or JS, treat as HTML
+            html += triggerContent + '\n';
+        } else {
+            // Default content
+            html += '<div style="padding: 20px; font-family: Arial, sans-serif;">\n';
+            html += '<h1>Code Preview</h1>\n';
+            html += '<p>This is a preview of your code.</p>\n';
+            html += '</div>\n';
+        }
+
+        // Add JavaScript
+        if (codeBlocks.javascript.length > 0) {
+            html += '<script>\n';
+            codeBlocks.javascript.forEach(js => {
+                html += js + '\n';
+            });
+            html += '</script>\n';
+        }
+
+        html += '</body>\n</html>';
+        return html;
+    }
+
+    showHTMLPreview(htmlContent) {
+        const modal = document.getElementById('previewModalMobile');
+        const iframe = document.getElementById('previewFrameMobile');
+
+        if (!modal || !iframe) return;
+
+        // Create blob URL for the HTML content
+        const blob = new Blob([htmlContent], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+
+        // Set iframe source
+        iframe.src = url;
+
+        // Show modal
+        modal.classList.add('show');
+        modal.setAttribute('aria-hidden', 'false');
+
+        // Clean up blob URL after delay
+        setTimeout(() => {
+            URL.revokeObjectURL(url);
+        }, 2000);
+
+        // Haptic feedback
+        this.hapticFeedback('medium');
+    }
+
+    showToast(message) {
+        // Simple toast notification for mobile
+        const toast = document.createElement('div');
+        toast.className = 'mobile-toast';
+        toast.textContent = message;
+        toast.style.cssText = `
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--accent-color);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 24px;
+            font-size: 0.9rem;
+            z-index: 1001;
+            animation: toastSlideUp 0.3s ease;
+        `;
+
+        document.body.appendChild(toast);
+
+        setTimeout(() => {
+            toast.style.animation = 'toastSlideDown 0.3s ease forwards';
+            setTimeout(() => {
+                document.body.removeChild(toast);
+            }, 300);
+        }, 2000);
+    }
+
+    closePreview() {
+        const modal = document.getElementById('previewModalMobile');
+        if (modal) {
+            modal.classList.remove('show', 'fullscreen');
+            modal.setAttribute('aria-hidden', 'true');
+
+            // Clear iframe source to stop any running scripts
+            const iframe = document.getElementById('previewFrameMobile');
+            if (iframe) {
+                iframe.src = 'about:blank';
+            }
+        }
+    }
+
+    toggleFullscreen() {
+        const modal = document.getElementById('previewModalMobile');
+        const fullscreenBtn = document.getElementById('fullscreenBtnMobile');
+
+        if (modal && fullscreenBtn) {
+            const isFullscreen = modal.classList.contains('fullscreen');
+
+            if (isFullscreen) {
+                modal.classList.remove('fullscreen');
+                fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i>';
+                fullscreenBtn.title = 'Enter fullscreen';
+            } else {
+                modal.classList.add('fullscreen');
+                fullscreenBtn.innerHTML = '<i class="fas fa-compress"></i>';
+                fullscreenBtn.title = 'Exit fullscreen';
+            }
+
+            // Haptic feedback
+            this.hapticFeedback('light');
+        }
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
     formatTime(timestamp) {
         const date = new Date(timestamp);
         const now = new Date();
@@ -590,3 +924,39 @@ class MobileParadoxGPT {
 document.addEventListener('DOMContentLoaded', () => {
     window.mobileApp = new MobileParadoxGPT();
 });
+
+// Add debugging functions for mobile code review
+window.testMobileCodeReview = function() {
+    console.log('Testing mobile code review feature...');
+
+    // Test HTML code
+    const testHTML = `<!DOCTYPE html>
+<html>
+<head>
+    <title>Test</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        .test { color: blue; }
+    </style>
+</head>
+<body>
+    <h1 class="test">Hello World!</h1>
+    <script>
+        console.log('Hello from mobile preview!');
+    </script>
+</body>
+</html>`;
+
+    if (window.mobileApp) {
+        window.mobileApp.showHTMLPreview(testHTML);
+        console.log('Mobile preview should be showing...');
+    } else {
+        console.error('Mobile app not initialized');
+    }
+};
+
+window.testMobileToast = function() {
+    if (window.mobileApp) {
+        window.mobileApp.showToast('Test toast notification!');
+    }
+};

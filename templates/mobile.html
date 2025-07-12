@@ -186,7 +186,28 @@
         </div>
     </div>
 
-
+    <!-- HTML Preview Modal for Mobile -->
+    <div id="previewModalMobile" class="preview-modal-mobile" role="dialog" aria-labelledby="previewTitleMobile" aria-hidden="true">
+        <div class="preview-modal-content-mobile">
+            <div class="preview-header-mobile">
+                <h3 id="previewTitleMobile" class="preview-title-mobile">
+                    <i class="fas fa-eye"></i>
+                    Code Preview
+                </h3>
+                <div class="preview-controls-mobile">
+                    <button id="fullscreenBtnMobile" class="preview-btn-mobile" title="Toggle fullscreen" aria-label="Toggle fullscreen">
+                        <i class="fas fa-expand"></i>
+                    </button>
+                    <button id="closePreviewBtnMobile" class="preview-btn-mobile" title="Close preview" aria-label="Close preview">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="preview-body-mobile">
+                <iframe id="previewFrameMobile" sandbox="allow-scripts allow-same-origin" title="Code Preview"></iframe>
+            </div>
+        </div>
+    </div>
 
     <!-- Scripts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" crossorigin="anonymous"></script>

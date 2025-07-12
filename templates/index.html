@@ -115,6 +115,16 @@
 
         <!-- Main Content -->
         <main class="main-content" role="main">
+            <!-- Chat Header with Actions -->
+            <div class="chat-header">
+                <div class="chat-actions">
+                    <button class="chat-action-btn" id="copyAllBtn" onclick="copyAllAnswers()" title="Copy all AI responses">
+                        <i class="fas fa-copy"></i>
+                        <span>Copy All Answers</span>
+                    </button>
+                </div>
+            </div>
+
             <div class="chat-container" id="chatContainer" role="log" aria-live="polite" aria-label="Conversation">
                 <div class="welcome-section">
                     <div class="welcome-content">

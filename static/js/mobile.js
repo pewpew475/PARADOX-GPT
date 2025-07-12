@@ -38,8 +38,9 @@ class MobileParadoxGPT {
         this.setupInputHandling();
         this.setupQuickActions();
         this.initializeFirebase();
+        this.addCopyAllButton();
         this.updateSendButtonState();
-        
+
         console.log('Mobile ParadoxGPT initialized');
     }
     
@@ -193,7 +194,92 @@ class MobileParadoxGPT {
             }, 300);
         });
     }
-    
+
+    addCopyAllButton() {
+        // Create copy all answers button for mobile
+        const copyAllBtn = document.createElement('button');
+        copyAllBtn.className = 'copy-all-btn-mobile';
+        copyAllBtn.innerHTML = '<i class="fas fa-copy"></i><span>Copy All</span>';
+        copyAllBtn.title = 'Copy all AI responses';
+        copyAllBtn.addEventListener('click', () => {
+            this.copyAllAnswers();
+        });
+
+        // Add to mobile header (create if doesn't exist)
+        let mobileHeader = document.querySelector('.mobile-header-actions');
+        if (!mobileHeader) {
+            mobileHeader = document.createElement('div');
+            mobileHeader.className = 'mobile-header-actions';
+
+            // Insert after the menu button
+            const menuBtn = this.elements.menuBtn;
+            if (menuBtn && menuBtn.parentNode) {
+                menuBtn.parentNode.insertBefore(mobileHeader, menuBtn.nextSibling);
+            }
+        }
+
+        mobileHeader.appendChild(copyAllBtn);
+    }
+
+    copyAllAnswers() {
+        const assistantMessages = document.querySelectorAll('.message-mobile.assistant .message-content-mobile');
+        if (assistantMessages.length === 0) {
+            this.showWarningToast('No AI responses found ⚠️');
+            return;
+        }
+
+        let allAnswers = '';
+        assistantMessages.forEach((messageContent, index) => {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = messageContent.innerHTML;
+            const plainText = tempDiv.textContent || tempDiv.innerText || '';
+
+            allAnswers += `--- Answer ${index + 1} ---\n${plainText}\n\n`;
+        });
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(allAnswers).then(() => {
+                this.showSuccessToast(`Copied ${assistantMessages.length} answers! 📋✅`);
+            }).catch(() => {
+                this.fallbackCopyAllAnswers(allAnswers, assistantMessages.length);
+            });
+        } else {
+            this.fallbackCopyAllAnswers(allAnswers, assistantMessages.length);
+        }
+    }
+
+    fallbackCopyAllAnswers(text, count) {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+
+        try {
+            document.execCommand('copy');
+            this.showSuccessToast(`Copied ${count} answers! 📋✅`);
+        } catch (err) {
+            this.showErrorToast('Failed to copy all answers ❌');
+        }
+
+        document.body.removeChild(textArea);
+    }
+
+    updateCopyAllButtonVisibility() {
+        const copyAllBtn = document.querySelector('.copy-all-btn-mobile');
+        const assistantMessages = document.querySelectorAll('.message-mobile.assistant');
+
+        if (copyAllBtn) {
+            if (assistantMessages.length > 0) {
+                copyAllBtn.classList.add('visible');
+            } else {
+                copyAllBtn.classList.remove('visible');
+            }
+        }
+    }
+
     setupQuickActions() {
         const quickActions = document.querySelectorAll('.quick-action');
         quickActions.forEach(action => {
@@ -667,7 +753,7 @@ class MobileParadoxGPT {
                 this.closeSidebar();
 
                 // Show toast feedback
-                this.showToast(`Loaded conversation with ${conversation.length} messages`);
+                this.showSuccessToast(`Loaded conversation with ${conversation.length} messages 📱`);
 
                 // Reset loading state
                 setTimeout(() => {
@@ -791,7 +877,7 @@ class MobileParadoxGPT {
 
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(code).then(() => {
-                this.showToast('Code copied to clipboard!');
+                this.showSuccessToast('Code copied to clipboard! ✅');
             }).catch(() => {
                 this.fallbackCopyCode(code);
             });
@@ -812,9 +898,9 @@ class MobileParadoxGPT {
 
         try {
             document.execCommand('copy');
-            this.showToast('Code copied to clipboard!');
+            this.showSuccessToast('Code copied to clipboard! ✅');
         } catch (err) {
-            this.showToast('Failed to copy code');
+            this.showErrorToast('Failed to copy code ❌');
         }
 
         document.body.removeChild(textArea);
@@ -1049,6 +1135,7 @@ class MobileParadoxGPT {
             padding: 16px;
             background: #f5f5f5;
             line-height: 1.6;
+            -webkit-text-size-adjust: 100%;
         }
         #root {
             background: white;
@@ -1065,24 +1152,98 @@ class MobileParadoxGPT {
             border-left: 4px solid #d32f2f;
             margin: 10px 0;
             font-size: 14px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+            font-size: 16px;
+        }
+        /* Mobile-friendly button styles */
+        button {
+            min-height: 44px;
+            min-width: 44px;
+            touch-action: manipulation;
         }
         /* Custom CSS from code blocks */
         ${cssCode}
     </style>
 </head>
 <body>
-    <div id="root"></div>
+    <div id="root">
+        <div class="loading">Loading React component...</div>
+    </div>
 
     <script type="text/babel">
-        const { useState, useEffect, useCallback, useMemo, useRef } = React;
+        // React hooks and components
+        const { useState, useEffect, useCallback, useMemo, useRef, Component } = React;
+
+        // Mobile-optimized error boundary
+        class ErrorBoundary extends React.Component {
+            constructor(props) {
+                super(props);
+                this.state = { hasError: false, error: null };
+            }
+
+            static getDerivedStateFromError(error) {
+                return { hasError: true, error };
+            }
+
+            componentDidCatch(error, errorInfo) {
+                console.error('React Error:', error, errorInfo);
+            }
+
+            render() {
+                if (this.state.hasError) {
+                    return React.createElement('div', { className: 'error' },
+                        React.createElement('strong', {}, 'Component Error: '),
+                        this.state.error.message,
+                        React.createElement('br'),
+                        React.createElement('br'),
+                        React.createElement('small', {}, 'Check the browser console for more details.')
+                    );
+                }
+                return this.props.children;
+            }
+        }
 
         try {
             // Component code
             ${reactCode}
 
-            // Default component if none defined
-            if (typeof App === 'undefined') {
-                function App() {
+            // Try to find and render the component
+            let ComponentToRender = null;
+
+            // Look for different export patterns
+            if (typeof App !== 'undefined') {
+                ComponentToRender = App;
+            } else if (typeof MyComponent !== 'undefined') {
+                ComponentToRender = MyComponent;
+            } else if (typeof Component !== 'undefined' && Component !== React.Component) {
+                ComponentToRender = Component;
+            } else {
+                // Try to find any function that looks like a component
+                const globalKeys = Object.keys(window);
+                for (const key of globalKeys) {
+                    const value = window[key];
+                    if (typeof value === 'function' &&
+                        key[0] === key[0].toUpperCase() &&
+                        key !== 'React' &&
+                        key !== 'ReactDOM' &&
+                        key !== 'Babel' &&
+                        key !== 'ErrorBoundary') {
+                        ComponentToRender = value;
+                        break;
+                    }
+                }
+            }
+
+            // Default component if none found
+            if (!ComponentToRender) {
+                ComponentToRender = function DefaultComponent() {
                     return React.createElement('div', {
                         style: {
                             textAlign: 'center',
@@ -1093,29 +1254,49 @@ class MobileParadoxGPT {
                         React.createElement('h2', {
                             style: {
                                 color: '#61dafb',
-                                marginBottom: '16px'
+                                marginBottom: '16px',
+                                fontSize: '1.5rem'
                             }
                         }, 'React Component Preview'),
-                        React.createElement('p', {}, 'Your React component will appear here.'),
                         React.createElement('p', {
+                            style: { marginBottom: '16px' }
+                        }, 'No React component found.'),
+                        React.createElement('div', {
                             style: {
                                 fontSize: '14px',
-                                marginTop: '20px'
+                                background: '#f0f0f0',
+                                padding: '16px',
+                                borderRadius: '8px',
+                                textAlign: 'left',
+                                maxWidth: '400px',
+                                margin: '0 auto'
                             }
-                        }, 'Make sure your component is exported as "App" or define a default export.')
+                        },
+                            React.createElement('strong', {}, 'Tips:'),
+                            React.createElement('br'),
+                            '• Export your component as "App"',
+                            React.createElement('br'),
+                            '• Use function names starting with capital letters',
+                            React.createElement('br'),
+                            '• Make sure JSX syntax is correct'
+                        )
                     );
-                }
+                };
             }
 
-            // Render the component
+            // Render the component with error boundary
             const root = ReactDOM.createRoot(document.getElementById('root'));
-            root.render(React.createElement(App));
+            root.render(
+                React.createElement(ErrorBoundary, {},
+                    React.createElement(ComponentToRender)
+                )
+            );
 
         } catch (error) {
-            console.error('React component error:', error);
+            console.error('React setup error:', error);
             document.getElementById('root').innerHTML =
-                '<div class="error"><strong>Error:</strong> ' + error.message +
-                '<br><br><small>Make sure your React component is properly formatted and exported.</small></div>';
+                '<div class="error"><strong>Setup Error:</strong>\\n' + error.message +
+                '\\n\\nMake sure your React component is properly formatted.</div>';
         }
     </script>
 </body>
@@ -1330,6 +1511,152 @@ class MobileParadoxGPT {
                 window.hljs.highlightElement(block);
             });
         }
+
+        // Add message actions for assistant messages
+        if (messageDiv.classList.contains('assistant')) {
+            this.addMessageActions(messageContent, content, messageDiv, metadata);
+            // Show copy all button when there are assistant messages
+            this.updateCopyAllButtonVisibility();
+        }
+    }
+
+    addMessageActions(messageContent, content, messageDiv, metadata) {
+        // Create message actions container
+        const actionsContainer = document.createElement('div');
+        actionsContainer.className = 'message-actions-mobile';
+
+        // Copy message button
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'message-action-btn-mobile copy-btn';
+        copyBtn.innerHTML = '<i class="fas fa-copy"></i>';
+        copyBtn.title = 'Copy message';
+        copyBtn.addEventListener('click', () => {
+            this.copyMessage(content, copyBtn);
+        });
+
+        // Regenerate button
+        const regenerateBtn = document.createElement('button');
+        regenerateBtn.className = 'message-action-btn-mobile regenerate-btn';
+        regenerateBtn.innerHTML = '<i class="fas fa-redo"></i>';
+        regenerateBtn.title = 'Regenerate response';
+        regenerateBtn.addEventListener('click', () => {
+            this.regenerateResponse(messageDiv);
+        });
+
+        actionsContainer.appendChild(copyBtn);
+        actionsContainer.appendChild(regenerateBtn);
+
+        // Add actions to message content
+        messageContent.appendChild(actionsContainer);
+    }
+
+    copyMessage(content, button) {
+        // Get plain text content without HTML
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = content;
+        const plainText = tempDiv.textContent || tempDiv.innerText || '';
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(plainText).then(() => {
+                // Visual feedback
+                const originalIcon = button.innerHTML;
+                button.innerHTML = '<i class="fas fa-check"></i>';
+                button.classList.add('success');
+
+                this.showSuccessToast('Message copied to clipboard! ✅');
+
+                setTimeout(() => {
+                    button.innerHTML = originalIcon;
+                    button.classList.remove('success');
+                }, 2000);
+            }).catch(() => {
+                this.fallbackCopyMessage(plainText, button);
+            });
+        } else {
+            this.fallbackCopyMessage(plainText, button);
+        }
+    }
+
+    fallbackCopyMessage(text, button) {
+        // Fallback copy method
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+
+        try {
+            document.execCommand('copy');
+            const originalIcon = button.innerHTML;
+            button.innerHTML = '<i class="fas fa-check"></i>';
+            button.classList.add('success');
+
+            this.showSuccessToast('Message copied to clipboard! ✅');
+
+            setTimeout(() => {
+                button.innerHTML = originalIcon;
+                button.classList.remove('success');
+            }, 2000);
+        } catch (err) {
+            this.showErrorToast('Failed to copy message ❌');
+        }
+
+        document.body.removeChild(textArea);
+    }
+
+    regenerateResponse(messageDiv) {
+        // Find the previous user message
+        let userMessage = messageDiv.previousElementSibling;
+        while (userMessage && !userMessage.classList.contains('user')) {
+            userMessage = userMessage.previousElementSibling;
+        }
+
+        if (!userMessage) {
+            this.showErrorToast('Cannot find original message to regenerate ❌');
+            return;
+        }
+
+        // Get the user's message content
+        const userContent = userMessage.querySelector('.message-content-mobile').textContent.trim();
+
+        // Remove the current assistant message
+        messageDiv.remove();
+
+        // Show typing indicator
+        const typingIndicator = this.addTypingIndicator();
+
+        // Send regeneration request
+        fetch('/chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                message: userContent,
+                regenerate: true
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            this.removeTypingIndicator();
+
+            if (data.success) {
+                this.addMessage(data.message, 'assistant', data.metadata);
+                this.showSuccessToast('Response regenerated! 🔄');
+            } else {
+                this.addMessage('Sorry, I encountered an error: ' + (data.message || 'Unknown error'), 'assistant');
+                this.showErrorToast('Failed to regenerate response ❌');
+            }
+        })
+        .catch(error => {
+            this.removeTypingIndicator();
+            this.addMessage('Sorry, I encountered an error while regenerating the response.', 'assistant');
+            this.showErrorToast('Network error occurred ❌');
+            console.error('Error:', error);
+        });
     }
 
     addTypingIndicator() {
@@ -1364,33 +1691,67 @@ class MobileParadoxGPT {
         }
     }
 
-    showToast(message) {
-        // Simple toast notification for mobile
+    showToast(message, type = 'default', duration = 2500) {
+        // Enhanced toast notification for mobile with better visibility
         const toast = document.createElement('div');
-        toast.className = 'mobile-toast';
+        toast.className = 'mobile-toast slide-up';
+
+        // Add type-specific class
+        if (type === 'success') {
+            toast.classList.add('success');
+        } else if (type === 'error') {
+            toast.classList.add('error');
+        } else if (type === 'warning') {
+            toast.classList.add('warning');
+        }
+
         toast.textContent = message;
-        toast.style.cssText = `
-            position: fixed;
-            bottom: 100px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: var(--accent-color);
-            color: white;
-            padding: 12px 24px;
-            border-radius: 24px;
-            font-size: 0.9rem;
-            z-index: 1001;
-            animation: toastSlideUp 0.3s ease;
-        `;
+
+        // Ensure toast is visible by removing any existing toasts first
+        const existingToasts = document.querySelectorAll('.mobile-toast');
+        existingToasts.forEach(existingToast => {
+            if (existingToast.parentNode) {
+                existingToast.parentNode.removeChild(existingToast);
+            }
+        });
 
         document.body.appendChild(toast);
 
+        // Force a reflow to ensure the element is rendered before animation
+        toast.offsetHeight;
+
+        // Add haptic feedback if available
+        this.hapticFeedback('light');
+
+        // Auto-hide after duration
         setTimeout(() => {
-            toast.style.animation = 'toastSlideDown 0.3s ease forwards';
-            setTimeout(() => {
-                document.body.removeChild(toast);
-            }, 300);
-        }, 2000);
+            if (toast.parentNode) {
+                toast.classList.remove('slide-up');
+                toast.classList.add('slide-down');
+
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        document.body.removeChild(toast);
+                    }
+                }, 300);
+            }
+        }, duration);
+
+        // Return toast element for manual control if needed
+        return toast;
+    }
+
+    // Convenience methods for different toast types
+    showSuccessToast(message, duration = 2500) {
+        return this.showToast(message, 'success', duration);
+    }
+
+    showErrorToast(message, duration = 3000) {
+        return this.showToast(message, 'error', duration);
+    }
+
+    showWarningToast(message, duration = 2500) {
+        return this.showToast(message, 'warning', duration);
     }
 
     closePreview() {
@@ -1489,7 +1850,32 @@ window.testMobileCodeReview = function() {
 
 window.testMobileToast = function() {
     if (window.mobileApp) {
-        window.mobileApp.showToast('Test toast notification!');
+        console.log('Testing mobile toast notifications...');
+
+        // Test default toast
+        window.mobileApp.showToast('Default toast notification! 📱');
+
+        // Test success toast after 1 second
+        setTimeout(() => {
+            window.mobileApp.showSuccessToast('Success! Operation completed ✅');
+        }, 1000);
+
+        // Test warning toast after 2 seconds
+        setTimeout(() => {
+            window.mobileApp.showWarningToast('Warning: Check your input ⚠️');
+        }, 2000);
+
+        // Test error toast after 3 seconds
+        setTimeout(() => {
+            window.mobileApp.showErrorToast('Error: Something went wrong ❌');
+        }, 3000);
+
+        // Test long message after 4 seconds
+        setTimeout(() => {
+            window.mobileApp.showToast('This is a longer message to test text overflow and wrapping behavior 📝');
+        }, 4000);
+    } else {
+        console.error('Mobile app not initialized');
     }
 };
 
@@ -1560,46 +1946,178 @@ window.testMobileReactPreview = function() {
 
     const testReactCode = `function App() {
     const [count, setCount] = useState(0);
-    const [name, setName] = useState('React User');
+    const [name, setName] = useState('Mobile User');
+    const [isVisible, setIsVisible] = useState(true);
+    const [color, setColor] = useState('#61dafb');
+
+    const colors = ['#61dafb', '#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57'];
+
+    const changeColor = () => {
+        const randomColor = colors[Math.floor(Math.random() * colors.length)];
+        setColor(randomColor);
+    };
 
     return (
-        <div style={{ padding: '20px', textAlign: 'center' }}>
-            <h1 style={{ color: '#61dafb' }}>Hello, {name}!</h1>
-            <p>You clicked {count} times</p>
-            <button
-                onClick={() => setCount(count + 1)}
-                style={{
-                    background: '#61dafb',
-                    color: 'white',
-                    border: 'none',
-                    padding: '10px 20px',
-                    borderRadius: '5px',
-                    cursor: 'pointer',
-                    margin: '10px'
-                }}
-            >
-                Click me!
-            </button>
-            <br />
-            <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Enter your name"
-                style={{
-                    padding: '8px',
-                    borderRadius: '4px',
-                    border: '1px solid #ccc',
-                    margin: '10px'
-                }}
-            />
+        <div style={{
+            padding: '20px',
+            textAlign: 'center',
+            background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+            minHeight: '100vh',
+            fontFamily: 'Arial, sans-serif'
+        }}>
+            <h1 style={{
+                color: color,
+                marginBottom: '20px',
+                fontSize: '1.8rem',
+                textShadow: '0 2px 4px rgba(0,0,0,0.1)'
+            }}>
+                Hello, {name}! 👋
+            </h1>
+
+            {isVisible && (
+                <div style={{
+                    background: 'white',
+                    borderRadius: '15px',
+                    padding: '20px',
+                    marginBottom: '20px',
+                    boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
+                }}>
+                    <p style={{ fontSize: '1.2rem', margin: '0 0 15px 0' }}>
+                        Button clicked: <strong style={{ color: color }}>{count}</strong> times
+                    </p>
+
+                    <div style={{ marginBottom: '15px' }}>
+                        <button
+                            onClick={() => setCount(count + 1)}
+                            style={{
+                                background: color,
+                                color: 'white',
+                                border: 'none',
+                                padding: '15px 25px',
+                                borderRadius: '25px',
+                                cursor: 'pointer',
+                                margin: '5px',
+                                fontSize: '16px',
+                                fontWeight: 'bold',
+                                minWidth: '120px',
+                                boxShadow: '0 4px 15px rgba(0,0,0,0.2)',
+                                transition: 'transform 0.2s'
+                            }}
+                            onMouseDown={(e) => e.target.style.transform = 'scale(0.95)'}
+                            onMouseUp={(e) => e.target.style.transform = 'scale(1)'}
+                        >
+                            Click me! 🚀
+                        </button>
+                    </div>
+
+                    <div style={{ marginBottom: '15px' }}>
+                        <button
+                            onClick={changeColor}
+                            style={{
+                                background: 'linear-gradient(45deg, #667eea 0%, #764ba2 100%)',
+                                color: 'white',
+                                border: 'none',
+                                padding: '12px 20px',
+                                borderRadius: '20px',
+                                cursor: 'pointer',
+                                margin: '5px',
+                                fontSize: '14px'
+                            }}
+                        >
+                            Change Color 🎨
+                        </button>
+
+                        <button
+                            onClick={() => setCount(0)}
+                            style={{
+                                background: '#6c757d',
+                                color: 'white',
+                                border: 'none',
+                                padding: '12px 20px',
+                                borderRadius: '20px',
+                                cursor: 'pointer',
+                                margin: '5px',
+                                fontSize: '14px'
+                            }}
+                        >
+                            Reset 🔄
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            <div style={{
+                background: 'white',
+                borderRadius: '15px',
+                padding: '20px',
+                marginBottom: '20px',
+                boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
+            }}>
+                <label style={{
+                    display: 'block',
+                    marginBottom: '10px',
+                    fontWeight: 'bold',
+                    color: '#333'
+                }}>
+                    Your Name:
+                </label>
+                <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Enter your name"
+                    style={{
+                        padding: '15px',
+                        borderRadius: '10px',
+                        border: '2px solid ' + color,
+                        margin: '10px 0',
+                        fontSize: '16px',
+                        width: '100%',
+                        maxWidth: '300px',
+                        boxSizing: 'border-box',
+                        outline: 'none'
+                    }}
+                />
+            </div>
+
+            <div style={{
+                background: 'white',
+                borderRadius: '15px',
+                padding: '20px',
+                boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
+            }}>
+                <button
+                    onClick={() => setIsVisible(!isVisible)}
+                    style={{
+                        background: isVisible ? '#dc3545' : '#28a745',
+                        color: 'white',
+                        border: 'none',
+                        padding: '12px 20px',
+                        borderRadius: '20px',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        fontWeight: 'bold'
+                    }}
+                >
+                    {isVisible ? 'Hide Counter 👁️' : 'Show Counter 👁️'}
+                </button>
+            </div>
+
+            <div style={{
+                marginTop: '30px',
+                fontSize: '12px',
+                color: '#666',
+                background: 'rgba(255,255,255,0.8)',
+                padding: '10px',
+                borderRadius: '10px'
+            }}>
+                React Mobile Preview Demo 📱
+            </div>
         </div>
     );
-}
+}`;
 
-export default App;`;
-
-    console.log('Testing mobile React preview...');
+    console.log('Testing mobile React preview with interactive demo...');
     const reactHTML = window.mobileApp.createReactPreviewDocument(testReactCode, null);
     window.mobileApp.showHTMLPreview(reactHTML);
 };
@@ -1634,4 +2152,82 @@ window.checkMobileElements = function() {
     console.log('CSS Variables:', computedStyle.getPropertyValue('--accent-color') ? '✅ Loaded' : '❌ Missing');
 
     console.log('============================');
+};
+
+window.testToastVisibility = function() {
+    if (!window.mobileApp) {
+        console.error('Mobile app not initialized');
+        return;
+    }
+
+    console.log('=== Testing Toast Visibility ===');
+
+    // Test immediate visibility
+    const toast1 = window.mobileApp.showToast('Visibility Test 1: Can you see this? 👀');
+    console.log('Toast 1 created:', toast1);
+
+    setTimeout(() => {
+        // Check if toast is in DOM and visible
+        const toastInDom = document.querySelector('.mobile-toast');
+        if (toastInDom) {
+            const styles = window.getComputedStyle(toastInDom);
+            console.log('Toast found in DOM:');
+            console.log('- Position:', styles.position);
+            console.log('- Z-index:', styles.zIndex);
+            console.log('- Bottom:', styles.bottom);
+            console.log('- Left:', styles.left);
+            console.log('- Transform:', styles.transform);
+            console.log('- Background:', styles.backgroundColor);
+            console.log('- Color:', styles.color);
+            console.log('- Opacity:', styles.opacity);
+            console.log('- Display:', styles.display);
+            console.log('- Visibility:', styles.visibility);
+        } else {
+            console.error('❌ Toast not found in DOM!');
+        }
+    }, 100);
+
+    // Test different positions
+    setTimeout(() => {
+        window.mobileApp.showSuccessToast('Position Test: Success Toast ✅');
+    }, 1500);
+
+    setTimeout(() => {
+        window.mobileApp.showErrorToast('Position Test: Error Toast ❌');
+    }, 3000);
+
+    console.log('Check the mobile screen for toast notifications...');
+};
+
+window.testMobileButtons = function() {
+    if (!window.mobileApp) {
+        console.error('Mobile app not initialized');
+        return;
+    }
+
+    console.log('=== Testing Mobile Buttons ===');
+
+    // Add some test messages first
+    window.mobileApp.addMessage('Hello! This is a test user message.', 'user');
+
+    setTimeout(() => {
+        window.mobileApp.addMessage('This is a test AI response with some content to copy. It includes **markdown** and `code snippets`.', 'assistant');
+    }, 500);
+
+    setTimeout(() => {
+        window.mobileApp.addMessage('Here is another AI response for testing the copy all functionality.', 'assistant');
+    }, 1000);
+
+    setTimeout(() => {
+        console.log('✅ Test messages added');
+        console.log('✅ Copy All button should now be visible');
+        console.log('✅ Each AI message should have copy and regenerate buttons');
+        console.log('✅ Try tapping the buttons to test functionality');
+
+        // Test copy all functionality
+        setTimeout(() => {
+            console.log('Testing copy all functionality...');
+            window.mobileApp.copyAllAnswers();
+        }, 2000);
+    }, 1500);
 };

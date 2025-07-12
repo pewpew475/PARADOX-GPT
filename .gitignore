@@ -15,6 +15,18 @@ api_keys.txt
 secrets.txt
 config.json
 credentials.json
+firebase-service-account*.json
+service-account*.json
+*-key.json
+*.pem
+*.p12
+
+# Generated environment files
+production.env
+docker.env
+set_env_vars.ps1
+.env.production
+.env.staging
 
 # ===================================
 # PYTHON

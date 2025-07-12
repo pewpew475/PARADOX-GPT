@@ -4,6 +4,8 @@ import logging
 import sys
 import os
 from config import validate_api_keys
+from firebase_admin_config import verify_token, save_chat, get_user_chats, is_firebase_ready
+from functools import wraps
 
 # Configure logging
 try:
@@ -38,6 +40,56 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
+# Authentication decorator
+def require_auth(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Check if Firebase is ready
+        if not is_firebase_ready():
+            logger.warning("Firebase not initialized, allowing unauthenticated access")
+            return f(*args, **kwargs)
+
+        # Get authorization header
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({'error': 'No valid authorization token provided'}), 401
+
+        # Extract token
+        token = auth_header.split(' ')[1]
+
+        # Verify token
+        user_info = verify_token(token)
+        if not user_info:
+            return jsonify({'error': 'Invalid or expired token'}), 401
+
+        # Add user info to request context
+        request.user = user_info
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+# Optional authentication decorator (allows both authenticated and unauthenticated access)
+def optional_auth(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        request.user = None
+
+        # Check if Firebase is ready
+        if not is_firebase_ready():
+            return f(*args, **kwargs)
+
+        # Get authorization header
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ')[1]
+            user_info = verify_token(token)
+            if user_info:
+                request.user = user_info
+
+        return f(*args, **kwargs)
+
+    return decorated_function
+
 # Initialize the orchestrator
 try:
     orchestrator = ParadoxGPTOrchestrator()
@@ -47,9 +99,21 @@ except Exception as e:
 
 @app.route('/')
 def home():
-    return render_template('index.html')
+    # Firebase frontend configuration from environment variables
+    firebase_config = {
+        'api_key': os.getenv('FIREBASE_WEB_API_KEY'),
+        'auth_domain': os.getenv('FIREBASE_WEB_AUTH_DOMAIN'),
+        'project_id': os.getenv('FIREBASE_WEB_PROJECT_ID'),
+        'storage_bucket': os.getenv('FIREBASE_WEB_STORAGE_BUCKET'),
+        'messaging_sender_id': os.getenv('FIREBASE_WEB_MESSAGING_SENDER_ID'),
+        'app_id': os.getenv('FIREBASE_WEB_APP_ID'),
+        'measurement_id': os.getenv('FIREBASE_WEB_MEASUREMENT_ID')
+    }
+
+    return render_template('index.html', firebase_config=firebase_config)
 
 @app.route('/api/chat', methods=['POST'])
+@optional_auth
 def chat():
     try:
         data = request.json
@@ -57,6 +121,10 @@ def chat():
 
         if not task:
             return jsonify({'error': 'No message provided'}), 400
+
+        # Save user message if authenticated
+        if hasattr(request, 'user') and request.user:
+            save_chat(request.user['uid'], task, is_user=True)
 
         # Process the task
         result = orchestrator.process_task(task)
@@ -66,6 +134,10 @@ def chat():
             content = result["final_solution"]
             content_type = detect_content_type(content)
 
+            # Save AI response if authenticated
+            if hasattr(request, 'user') and request.user:
+                save_chat(request.user['uid'], content, is_user=False)
+
             response = {
                 'success': True,
                 'message': content,
@@ -73,7 +145,8 @@ def chat():
                 'metadata': {
                     'has_html': content_type == 'html' or 'html' in content_type,
                     'has_code': '```' in content,
-                    'generated_by': 'ParadoxGPT'
+                    'generated_by': 'ParadoxGPT',
+                    'user_authenticated': hasattr(request, 'user') and request.user is not None
                 }
             }
         else:
@@ -90,6 +163,80 @@ def chat():
 
     except Exception as e:
         logger.error(f"Error processing request: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/auth/verify', methods=['POST'])
+def verify_auth():
+    """Verify user authentication token"""
+    try:
+        data = request.json
+        token = data.get('token')
+
+        if not token:
+            return jsonify({'error': 'No token provided'}), 400
+
+        user_info = verify_token(token)
+        if user_info:
+            return jsonify({
+                'success': True,
+                'user': user_info
+            })
+        else:
+            return jsonify({'error': 'Invalid token'}), 401
+
+    except Exception as e:
+        logger.error(f"Error verifying auth: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/chat/history', methods=['GET'])
+@require_auth
+def get_chat_history():
+    """Get user's chat history"""
+    try:
+        limit = request.args.get('limit', 50, type=int)
+        chats = get_user_chats(request.user['uid'], limit)
+
+        return jsonify({
+            'success': True,
+            'chats': chats,
+            'count': len(chats)
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting chat history: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/user/stats', methods=['GET'])
+@require_auth
+def get_user_stats():
+    """Get user statistics"""
+    try:
+        from firebase_admin_config import get_stats
+        stats = get_stats(request.user['uid'])
+
+        return jsonify({
+            'success': True,
+            'stats': stats
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting user stats: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/cleanup', methods=['POST'])
+def cleanup_expired_chats():
+    """Clean up expired chat messages (admin endpoint)"""
+    try:
+        from firebase_admin_config import cleanup_expired
+        deleted_count = cleanup_expired()
+
+        return jsonify({
+            'success': True,
+            'deleted_count': deleted_count
+        })
+
+    except Exception as e:
+        logger.error(f"Error cleaning up chats: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 def detect_content_type(content):

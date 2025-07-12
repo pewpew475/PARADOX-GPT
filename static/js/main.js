@@ -19,6 +19,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let isProcessing = false;
     let conversationHistory = [];
 
+    // Firebase integration
+    let firebaseIntegration = null;
+
     // Initialize the application
     init();
 
@@ -29,6 +32,15 @@ document.addEventListener('DOMContentLoaded', () => {
         initParticleSystem();
         focusInput();
         updateToggleButtonVisibility(); // Initialize toggle button visibility
+
+        // Initialize Firebase integration
+        setTimeout(() => {
+            firebaseIntegration = window.firebaseIntegration;
+            if (firebaseIntegration) {
+                // Make addMessageToChat available globally for Firebase integration
+                window.addMessageToChat = addMessage;
+            }
+        }, 100);
     }
 
     function setupEventListeners() {
@@ -208,11 +220,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             // Send message to backend
+            const headers = {
+                'Content-Type': 'application/json',
+            };
+
+            // Add authentication header if user is logged in
+            if (firebaseIntegration && firebaseIntegration.currentUser) {
+                try {
+                    const token = await firebaseIntegration.currentUser.getIdToken();
+                    headers['Authorization'] = `Bearer ${token}`;
+                } catch (error) {
+                    console.warn('Failed to get auth token:', error);
+                }
+            }
+
             const response = await fetch('/api/chat', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: headers,
                 body: JSON.stringify({ message }),
             });
 
@@ -332,9 +356,17 @@ document.addEventListener('DOMContentLoaded', () => {
             if (codeBlock) {
                 hljs.highlightElement(codeBlock);
 
+                // Detect language for enhanced styling
+                const detectedLanguage = detectLanguageFromCode(codeBlock);
+
                 // Wrap in container for controls
                 const container = document.createElement('div');
                 container.className = 'code-block-container';
+
+                // Add language data attribute for CSS styling
+                if (detectedLanguage) {
+                    container.setAttribute('data-language', detectedLanguage);
+                }
 
                 // Create controls
                 const controls = document.createElement('div');
@@ -425,6 +457,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         chatContainer.appendChild(messageDiv);
 
+        // Save to Firebase if user is authenticated (only for new messages, not restored ones)
+        if (firebaseIntegration && firebaseIntegration.currentUser && !metadata?.skipFirebase) {
+            const isUser = role === 'user';
+            firebaseIntegration.saveMessage(content, isUser);
+        }
+
         // Scroll to bottom smoothly
         requestAnimationFrame(() => {
             chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -484,6 +522,32 @@ document.addEventListener('DOMContentLoaded', () => {
         return codeBlocks;
     }
 
+    function detectLanguageFromCode(codeElement) {
+        // Check highlight.js detected language first
+        const hlClasses = Array.from(codeElement.classList).find(cls => cls.startsWith('hljs-'));
+        if (hlClasses) {
+            const detectedLang = codeElement.getAttribute('data-highlighted');
+            if (detectedLang) return detectedLang;
+        }
+
+        // Check class name
+        const className = codeElement.className;
+        const langMatch = className.match(/(?:language-|hljs-)(\w+)/);
+        if (langMatch) {
+            const lang = langMatch[1].toLowerCase();
+            // Normalize common language names
+            if (lang === 'js') return 'javascript';
+            if (lang === 'py') return 'python';
+            if (lang === 'ts') return 'typescript';
+            if (lang === 'jsx') return 'javascript';
+            if (lang === 'tsx') return 'typescript';
+            return lang;
+        }
+
+        // Content-based detection
+        return detectCodeLanguage(codeElement, codeElement.textContent);
+    }
+
     function detectCodeLanguage(codeElement, content) {
         // Check class name first
         const className = codeElement.className;
@@ -496,9 +560,38 @@ document.addEventListener('DOMContentLoaded', () => {
         if (className.includes('language-javascript') || className.includes('language-js')) {
             return 'javascript';
         }
+        if (className.includes('language-python') || className.includes('language-py')) {
+            return 'python';
+        }
+        if (className.includes('language-json')) {
+            return 'json';
+        }
+        if (className.includes('language-sql')) {
+            return 'sql';
+        }
 
         // Content-based detection
         const lowerContent = content.toLowerCase();
+
+        // JSON detection (check first as it's more specific)
+        try {
+            JSON.parse(content.trim());
+            if (content.trim().startsWith('{') || content.trim().startsWith('[')) {
+                return 'json';
+            }
+        } catch (e) {
+            // Not JSON, continue with other checks
+        }
+
+        // Python detection
+        if (lowerContent.includes('def ') ||
+            lowerContent.includes('import ') ||
+            lowerContent.includes('from ') ||
+            lowerContent.includes('print(') ||
+            lowerContent.includes('if __name__') ||
+            lowerContent.includes('class ') && lowerContent.includes(':')) {
+            return 'python';
+        }
 
         // HTML detection
         if (lowerContent.includes('<!doctype') ||
@@ -517,6 +610,16 @@ document.addEventListener('DOMContentLoaded', () => {
              lowerContent.includes('background') || lowerContent.includes('margin') ||
              lowerContent.includes('padding') || lowerContent.includes('font'))) {
             return 'css';
+        }
+
+        // SQL detection
+        if (lowerContent.includes('select ') ||
+            lowerContent.includes('insert ') ||
+            lowerContent.includes('update ') ||
+            lowerContent.includes('delete ') ||
+            lowerContent.includes('create table') ||
+            lowerContent.includes('alter table')) {
+            return 'sql';
         }
 
         // JavaScript detection
@@ -649,11 +752,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const typingIndicator = addTypingIndicator();
 
+            // Prepare headers
+            const headers = {
+                'Content-Type': 'application/json',
+            };
+
+            // Add authentication header if user is logged in
+            if (firebaseIntegration && firebaseIntegration.currentUser) {
+                firebaseIntegration.currentUser.getIdToken().then(token => {
+                    headers['Authorization'] = `Bearer ${token}`;
+                }).catch(error => {
+                    console.warn('Failed to get auth token:', error);
+                });
+            }
+
             fetch('/api/chat', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: headers,
                 body: JSON.stringify({ message: userContent }),
             })
             .then(response => response.json())

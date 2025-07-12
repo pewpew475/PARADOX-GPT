@@ -37,8 +37,10 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => {
             firebaseIntegration = window.firebaseIntegration;
             if (firebaseIntegration) {
-                // Make addMessageToChat available globally for Firebase integration
+                // Make functions available globally for Firebase integration
                 window.addMessageToChat = addMessage;
+                window.showWelcomeSection = showWelcomeSection;
+                window.startNewChat = startNewChat;
             }
         }, 100);
     }

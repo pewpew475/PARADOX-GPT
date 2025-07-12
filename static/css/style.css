@@ -280,6 +280,52 @@ body {
     background: var(--border-hover);
 }
 
+/* Chat History Items */
+.chat-history-item {
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-sm);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-normal);
+    border: 1px solid transparent;
+}
+
+.chat-history-item:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-color);
+}
+
+.chat-history-item:active {
+    background: var(--bg-tertiary);
+}
+
+.conversation-title {
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-xs);
+    font-size: 0.875rem;
+    line-height: 1.3;
+}
+
+.conversation-time {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    margin-bottom: var(--spacing-xs);
+}
+
+.conversation-preview {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.no-history {
+    text-align: center;
+    color: var(--text-tertiary);
+    font-size: 0.875rem;
+    padding: var(--spacing-xl);
+    font-style: italic;
+}
+
 .sidebar-footer {
     padding: var(--spacing-lg);
     border-top: 1px solid var(--border-color);

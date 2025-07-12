@@ -462,30 +462,134 @@ class FirebaseIntegration {
                     });
                 });
 
-                this.restoreChatHistory(chats);
+                this.populateChatHistory(chats);
             });
         } catch (error) {
             console.error('Error loading chats:', error);
         }
     }
 
-    restoreChatHistory(chats) {
-        if (chats.length === 0) return;
-
-        // Clear current chat
-        const chatContainer = document.getElementById('chatContainer');
-        const welcomeSection = chatContainer.querySelector('.welcome-section');
-        if (welcomeSection) {
-            welcomeSection.remove();
+    populateChatHistory(chats) {
+        console.log('Populating chat history with', chats.length, 'chats');
+        const chatHistoryContainer = document.getElementById('chatHistory');
+        if (!chatHistoryContainer) {
+            console.error('Chat history container not found');
+            return;
         }
 
-        // Group messages and restore them
-        chats.forEach(chat => {
-            this.addMessageToUI(chat.message, chat.isUser, false); // false = don't save to Firebase
+        // Group chats by conversation sessions (by day or by conversation breaks)
+        const conversations = this.groupChatsByConversation(chats);
+        console.log('Grouped into', conversations.length, 'conversations');
+
+        // Clear existing history
+        chatHistoryContainer.innerHTML = '';
+
+        if (conversations.length === 0) {
+            chatHistoryContainer.innerHTML = '<div class="no-history">No chat history yet</div>';
+            return;
+        }
+
+        // Create conversation items
+        conversations.forEach((conversation, index) => {
+            const conversationItem = this.createConversationItem(conversation, index);
+            chatHistoryContainer.appendChild(conversationItem);
         });
 
-        // Scroll to bottom
-        chatContainer.scrollTop = chatContainer.scrollHeight;
+        console.log('Chat history populated successfully');
+    }
+
+    groupChatsByConversation(chats) {
+        if (chats.length === 0) return [];
+
+        const conversations = [];
+        let currentConversation = [];
+        let lastTimestamp = null;
+
+        chats.forEach(chat => {
+            const chatTime = chat.timestamp?.toDate ? chat.timestamp.toDate() : new Date(chat.timestamp);
+
+            // Start new conversation if more than 1 hour gap or if it's the first message
+            if (!lastTimestamp || (chatTime - lastTimestamp) > 60 * 60 * 1000) {
+                if (currentConversation.length > 0) {
+                    conversations.push(currentConversation);
+                }
+                currentConversation = [];
+            }
+
+            currentConversation.push(chat);
+            lastTimestamp = chatTime;
+        });
+
+        // Add the last conversation
+        if (currentConversation.length > 0) {
+            conversations.push(currentConversation);
+        }
+
+        return conversations.reverse(); // Most recent first
+    }
+
+    createConversationItem(conversation, index) {
+        const firstUserMessage = conversation.find(chat => chat.isUser);
+        const title = firstUserMessage ?
+            this.truncateText(firstUserMessage.message, 40) :
+            'New Conversation';
+
+        const lastMessage = conversation[conversation.length - 1];
+        const timestamp = lastMessage.timestamp?.toDate ?
+            lastMessage.timestamp.toDate() :
+            new Date(lastMessage.timestamp);
+
+        const item = document.createElement('div');
+        item.className = 'chat-history-item';
+        item.innerHTML = `
+            <div class="conversation-title">${title}</div>
+            <div class="conversation-time">${this.formatTime(timestamp)}</div>
+            <div class="conversation-preview">${conversation.length} messages</div>
+        `;
+
+        item.addEventListener('click', () => {
+            this.loadConversation(conversation);
+            // Close sidebar on mobile
+            const sidebar = document.getElementById('sidebar');
+            if (sidebar && window.innerWidth <= 768) {
+                sidebar.classList.add('collapsed');
+            }
+        });
+
+        return item;
+    }
+
+    loadConversation(conversation) {
+        // Clear current chat
+        const chatContainer = document.getElementById('chatContainer');
+        chatContainer.innerHTML = '';
+
+        // Add messages to chat
+        conversation.forEach(chat => {
+            if (window.addMessageToChat) {
+                window.addMessageToChat(chat.message, chat.isUser ? 'user' : 'assistant', { skipFirebase: true });
+            }
+        });
+    }
+
+    truncateText(text, maxLength) {
+        if (text.length <= maxLength) return text;
+        return text.substring(0, maxLength) + '...';
+    }
+
+    formatTime(date) {
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        if (diffDays < 7) return `${diffDays}d ago`;
+
+        return date.toLocaleDateString();
     }
 
     addMessageToUI(message, isUser, saveToFirebase = true) {
@@ -507,6 +611,22 @@ class FirebaseIntegration {
         if (this.chatUnsubscribe) {
             this.chatUnsubscribe();
             this.chatUnsubscribe = null;
+        }
+
+        // Clear the chat history sidebar
+        const chatHistoryContainer = document.getElementById('chatHistory');
+        if (chatHistoryContainer) {
+            chatHistoryContainer.innerHTML = '';
+        }
+
+        // Clear the main chat area
+        const chatContainer = document.getElementById('chatContainer');
+        if (chatContainer) {
+            chatContainer.innerHTML = '';
+            // Show welcome section
+            if (window.showWelcomeSection) {
+                window.showWelcomeSection();
+            }
         }
     }
 

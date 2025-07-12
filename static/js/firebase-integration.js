@@ -445,23 +445,29 @@ class FirebaseIntegration {
         try {
             const { collection, query, where, orderBy, onSnapshot, Timestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
+            // Use a simpler query that doesn't require a composite index
             const q = query(
                 collection(this.db, 'chats'),
                 where('userId', '==', this.currentUser.uid),
-                where('expiresAt', '>', Timestamp.now()),
-                orderBy('expiresAt'),
-                orderBy('timestamp', 'asc')
+                orderBy('timestamp', 'desc')
             );
 
             this.chatUnsubscribe = onSnapshot(q, (querySnapshot) => {
                 const chats = [];
+                const now = Timestamp.now();
+
                 querySnapshot.forEach((doc) => {
-                    chats.push({
-                        id: doc.id,
-                        ...doc.data()
-                    });
+                    const data = doc.data();
+                    // Filter out expired chats on the client side
+                    if (data.expiresAt && data.expiresAt.toMillis() > now.toMillis()) {
+                        chats.push({
+                            id: doc.id,
+                            ...data
+                        });
+                    }
                 });
 
+                console.log(`Loaded ${chats.length} valid chats (filtered from ${querySnapshot.size} total)`);
                 this.populateChatHistory(chats);
             });
         } catch (error) {

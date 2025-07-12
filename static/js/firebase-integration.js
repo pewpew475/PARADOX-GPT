@@ -521,31 +521,66 @@ class FirebaseIntegration {
     groupChatsByConversation(chats) {
         if (chats.length === 0) return [];
 
+        console.log('Grouping chats:', chats.length, 'total chats');
+
+        // Sort chats by timestamp first
+        const sortedChats = chats.sort((a, b) => {
+            const aTime = this.getChatTimestamp(a);
+            const bTime = this.getChatTimestamp(b);
+            return aTime - bTime; // Oldest first for grouping
+        });
+
         const conversations = [];
         let currentConversation = [];
         let lastTimestamp = null;
+        let lastWasUser = null;
 
-        chats.forEach(chat => {
-            const chatTime = chat.timestamp?.toDate ? chat.timestamp.toDate() : new Date(chat.timestamp);
+        sortedChats.forEach((chat, index) => {
+            const chatTime = this.getChatTimestamp(chat);
+            const isUser = chat.isUser;
 
-            // Start new conversation if more than 1 hour gap or if it's the first message
-            if (!lastTimestamp || (chatTime - lastTimestamp) > 60 * 60 * 1000) {
+            console.log(`Chat ${index}: ${isUser ? 'User' : 'AI'} at ${new Date(chatTime).toLocaleString()}`);
+
+            // Start new conversation if:
+            // 1. More than 30 minutes gap between messages, OR
+            // 2. We have a user message and the last conversation already has a complete user->AI pair
+            const timeDiff = lastTimestamp ? (chatTime - lastTimestamp) : 0;
+            const shouldStartNew = !lastTimestamp ||
+                                 timeDiff > 30 * 60 * 1000 || // 30 minutes
+                                 (isUser && currentConversation.length >= 2); // User message and we have a pair already
+
+            if (shouldStartNew) {
                 if (currentConversation.length > 0) {
-                    conversations.push(currentConversation);
+                    conversations.push([...currentConversation]);
+                    console.log(`Finished conversation with ${currentConversation.length} messages`);
                 }
                 currentConversation = [];
             }
 
             currentConversation.push(chat);
             lastTimestamp = chatTime;
+            lastWasUser = isUser;
         });
 
         // Add the last conversation
         if (currentConversation.length > 0) {
             conversations.push(currentConversation);
+            console.log(`Final conversation with ${currentConversation.length} messages`);
         }
 
+        console.log(`Created ${conversations.length} conversations`);
         return conversations.reverse(); // Most recent first
+    }
+
+    getChatTimestamp(chat) {
+        if (chat.timestamp?.toDate) {
+            return chat.timestamp.toDate().getTime();
+        } else if (chat.timestamp?.seconds) {
+            return chat.timestamp.seconds * 1000;
+        } else if (chat.timestamp) {
+            return new Date(chat.timestamp).getTime();
+        }
+        return 0;
     }
 
     createConversationItem(conversation, index) {

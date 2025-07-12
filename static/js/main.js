@@ -417,7 +417,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     previewBtn.innerHTML = '<i class="fas fa-eye"></i> Preview';
                     previewBtn.className = 'preview-button';
                     previewBtn.addEventListener('click', () => {
-                        showHTMLPreview(codeBlock);
+                        showHTMLPreview(codeBlock, messageDiv);
                     });
                     controls.appendChild(previewBtn);
                 }
@@ -427,9 +427,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     const previewBtn = document.createElement('button');
                     previewBtn.innerHTML = '<i class="fas fa-play"></i> Run All';
                     previewBtn.className = 'preview-button';
-                    previewBtn.title = 'Combine with other code blocks and preview';
+                    previewBtn.title = 'Combine with other code blocks from this message and preview';
                     previewBtn.addEventListener('click', () => {
-                        showHTMLPreview(codeBlock);
+                        showHTMLPreview(codeBlock, messageDiv);
                     });
                     controls.appendChild(previewBtn);
                 }
@@ -474,9 +474,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function showHTMLPreview(triggerCodeBlock) {
-        // Collect all code blocks from the conversation
-        const codeBlocks = collectCodeBlocksFromConversation();
+    function showHTMLPreview(triggerCodeBlock, messageElement = null) {
+        // Collect code blocks from specific message or entire conversation
+        const codeBlocks = messageElement ?
+            collectCodeBlocksFromMessage(messageElement) :
+            collectCodeBlocksFromConversation();
 
         // Create a complete HTML document by merging all relevant code blocks
         const fullHTML = createMergedHTMLDocument(codeBlocks, triggerCodeBlock);
@@ -522,6 +524,33 @@ document.addEventListener('DOMContentLoaded', () => {
                     codeBlocks.other.push({ language, content });
                 }
             });
+        });
+
+        return codeBlocks;
+    }
+
+    function collectCodeBlocksFromMessage(messageElement) {
+        const codeBlocks = {
+            html: [],
+            css: [],
+            javascript: [],
+            other: []
+        };
+
+        const codeElements = messageElement.querySelectorAll('pre code');
+        codeElements.forEach(code => {
+            const content = code.textContent.trim();
+            const language = detectCodeLanguage(code, content);
+
+            if (language === 'html') {
+                codeBlocks.html.push(content);
+            } else if (language === 'css') {
+                codeBlocks.css.push(content);
+            } else if (language === 'javascript') {
+                codeBlocks.javascript.push(content);
+            } else {
+                codeBlocks.other.push({ language, content });
+            }
         });
 
         return codeBlocks;

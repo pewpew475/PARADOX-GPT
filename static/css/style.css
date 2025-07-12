@@ -770,6 +770,19 @@ body {
     box-shadow: var(--shadow-xl), var(--glow-primary) !important;
 }
 
+.react-preview {
+    background: linear-gradient(135deg, #61dafb, #21d4fd) !important;
+    color: #20232a !important;
+    border-color: #61dafb !important;
+    box-shadow: var(--shadow-lg), 0 0 20px rgba(97, 218, 251, 0.3) !important;
+}
+
+.react-preview:hover {
+    background: linear-gradient(135deg, #21d4fd, #61dafb) !important;
+    transform: translateY(-2px) scale(1.05) !important;
+    box-shadow: var(--shadow-xl), 0 0 25px rgba(97, 218, 251, 0.5) !important;
+}
+
 /* Enhanced Syntax Highlighting */
 .hljs {
     background: var(--code-bg-primary) !important;

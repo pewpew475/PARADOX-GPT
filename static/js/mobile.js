@@ -331,9 +331,18 @@ class MobileParadoxGPT {
     showLoading() {
         this.elements.mobileLoading.style.display = 'block';
     }
-    
+
     hideLoading() {
         this.elements.mobileLoading.style.display = 'none';
+    }
+
+    // Enhanced loading with message
+    showLoadingWithMessage(message = 'Thinking...') {
+        this.elements.mobileLoading.style.display = 'block';
+        const loadingText = this.elements.mobileLoading.querySelector('p');
+        if (loadingText) {
+            loadingText.textContent = message;
+        }
     }
     
     showAuthModal() {
@@ -386,8 +395,8 @@ class MobileParadoxGPT {
         this.elements.messageInputMobile.value = '';
         this.elements.messageInputMobile.style.height = 'auto';
 
-        // Show loading
-        this.showLoading();
+        // Show typing indicator instead of loading
+        const typingIndicator = this.addTypingIndicator();
 
         // Haptic feedback
         this.hapticFeedback('medium');
@@ -421,8 +430,8 @@ class MobileParadoxGPT {
 
             const data = await response.json();
 
-            // Hide loading
-            this.hideLoading();
+            // Remove typing indicator
+            this.removeTypingIndicator();
 
             if (data.success) {
                 // Add assistant response
@@ -437,7 +446,7 @@ class MobileParadoxGPT {
                 this.addMessage('Sorry, I encountered an error: ' + (data.message || 'Unknown error'), 'assistant');
             }
         } catch (error) {
-            this.hideLoading();
+            this.removeTypingIndicator();
 
             const errorMessage = error.message.includes('fetch')
                 ? 'Unable to connect to the server. Please check your connection and try again.'
@@ -459,7 +468,23 @@ class MobileParadoxGPT {
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content-mobile';
 
-        // Process content based on type
+        // For assistant messages, use typewriter effect unless it's a restored message
+        if (role === 'assistant' && !metadata?.skipFirebase && !metadata?.skipTypewriter) {
+            // Start with empty content and animate
+            contentDiv.innerHTML = '';
+
+            messageDiv.appendChild(contentDiv);
+            this.elements.chatContainerMobile.appendChild(messageDiv);
+
+            // Scroll to bottom
+            this.scrollToBottom();
+
+            // Start typewriter effect
+            this.startTypewriterEffect(contentDiv, content, messageDiv, metadata);
+            return; // Exit early for typewriter effect
+        }
+
+        // Process content based on type (for user messages and restored messages)
         if (metadata && metadata.content_type === 'html') {
             // Handle HTML content
             contentDiv.innerHTML = content;
@@ -505,6 +530,10 @@ class MobileParadoxGPT {
                           code.includes('<html') ||
                           (code.includes('<div') && code.includes('<style'));
 
+            // Check if it's React/JSX code
+            const isReact = language === 'jsx' || language === 'tsx' || language === 'react' ||
+                           this.detectLanguageFromCode({ textContent: code }) === 'react';
+
             // Check if it's CSS or JavaScript that could be part of a web project
             const isWebCode = language === 'css' || language === 'javascript' || language === 'js';
 
@@ -519,6 +548,12 @@ class MobileParadoxGPT {
                 controls += `
                     <button class="preview-button-mobile" onclick="window.mobileApp.showCodePreview('${codeId}')" title="Preview HTML">
                         <i class="fas fa-eye"></i> Preview
+                    </button>
+                `;
+            } else if (isReact) {
+                controls += `
+                    <button class="react-preview-mobile" onclick="window.mobileApp.showReactPreview('${codeId}')" title="Preview React Component">
+                        <i class="fab fa-react"></i> React
                     </button>
                 `;
             } else if (isWebCode) {
@@ -604,30 +639,147 @@ class MobileParadoxGPT {
             return;
         }
 
-        console.log('Displaying', chats.length, 'chats');
+        // Group chats into conversations
+        const conversations = this.groupChatsByConversation(chats);
+        console.log('Grouped into', conversations.length, 'conversations');
 
-        chats.forEach(chat => {
+        conversations.forEach((conversation, index) => {
             const chatItem = document.createElement('div');
             chatItem.className = 'chat-history-item-mobile';
+
+            // Get the first user message as the title
+            const firstUserMessage = conversation.find(chat => chat.isUser);
+            const title = firstUserMessage ? firstUserMessage.message : conversation[0].message;
+            const lastMessage = conversation[conversation.length - 1];
+
             chatItem.innerHTML = `
-                <div class="chat-title-mobile">${this.escapeHtml(chat.message.substring(0, 50))}${chat.message.length > 50 ? '...' : ''}</div>
-                <div class="chat-time-mobile">${this.formatTime(chat.timestamp)}</div>
+                <div class="chat-title-mobile">${this.escapeHtml(title.substring(0, 50))}${title.length > 50 ? '...' : ''}</div>
+                <div class="chat-time-mobile">${this.formatTime(lastMessage.timestamp)} • ${conversation.length} messages</div>
             `;
 
             chatItem.addEventListener('click', () => {
-                // Load this chat conversation
-                this.loadChatConversation(chat);
+                // Add loading state
+                chatItem.style.opacity = '0.6';
+                chatItem.style.pointerEvents = 'none';
+
+                // Load this conversation
+                this.loadChatConversation(conversation);
                 this.closeSidebar();
+
+                // Show toast feedback
+                this.showToast(`Loaded conversation with ${conversation.length} messages`);
+
+                // Reset loading state
+                setTimeout(() => {
+                    chatItem.style.opacity = '1';
+                    chatItem.style.pointerEvents = 'auto';
+                }, 500);
             });
 
             this.elements.chatHistoryMobile.appendChild(chatItem);
         });
     }
 
-    loadChatConversation(chat) {
-        // This would load a specific chat conversation
-        // For now, just start a new chat
-        this.startNewChat();
+    groupChatsByConversation(chats) {
+        if (chats.length === 0) return [];
+
+        console.log('Grouping chats:', chats.length, 'total chats');
+
+        // Sort chats by timestamp first
+        const sortedChats = chats.sort((a, b) => {
+            const aTime = this.getChatTimestamp(a);
+            const bTime = this.getChatTimestamp(b);
+            return aTime - bTime; // Oldest first for grouping
+        });
+
+        const conversations = [];
+        let currentConversation = [];
+        let lastTimestamp = null;
+
+        sortedChats.forEach((chat, index) => {
+            const chatTime = this.getChatTimestamp(chat);
+            const isUser = chat.isUser;
+
+            console.log(`Chat ${index}: ${isUser ? 'User' : 'AI'} at ${new Date(chatTime).toLocaleString()}`);
+
+            // Start new conversation if:
+            // 1. More than 30 minutes gap between messages, OR
+            // 2. We have a user message and the last conversation already has a complete user->AI pair
+            const timeDiff = lastTimestamp ? (chatTime - lastTimestamp) : 0;
+            const shouldStartNew = !lastTimestamp ||
+                                 timeDiff > 30 * 60 * 1000 || // 30 minutes
+                                 (isUser && currentConversation.length >= 2); // User message and we have a pair already
+
+            if (shouldStartNew) {
+                if (currentConversation.length > 0) {
+                    conversations.push([...currentConversation]);
+                    console.log(`Finished conversation with ${currentConversation.length} messages`);
+                }
+                currentConversation = [];
+            }
+
+            currentConversation.push(chat);
+            lastTimestamp = chatTime;
+        });
+
+        // Add the last conversation
+        if (currentConversation.length > 0) {
+            conversations.push(currentConversation);
+            console.log(`Final conversation with ${currentConversation.length} messages`);
+        }
+
+        console.log(`Created ${conversations.length} conversations`);
+        return conversations.reverse(); // Most recent first
+    }
+
+    getChatTimestamp(chat) {
+        // Handle different timestamp formats
+        if (chat.timestamp) {
+            if (typeof chat.timestamp === 'object' && chat.timestamp.seconds) {
+                // Firestore timestamp
+                return chat.timestamp.seconds * 1000;
+            } else if (typeof chat.timestamp === 'string') {
+                // ISO string
+                return new Date(chat.timestamp).getTime();
+            } else if (typeof chat.timestamp === 'number') {
+                // Unix timestamp (check if it's in seconds or milliseconds)
+                return chat.timestamp > 1000000000000 ? chat.timestamp : chat.timestamp * 1000;
+            }
+        }
+        return Date.now(); // Fallback
+    }
+
+    loadChatConversation(conversation) {
+        console.log('Loading conversation with', conversation.length, 'messages');
+
+        // Clear current chat
+        this.elements.chatContainerMobile.innerHTML = '';
+        this.conversationHistory = [];
+
+        // Hide welcome screen
+        this.hideWelcomeScreen();
+
+        // Add messages to chat in chronological order
+        conversation.forEach(chat => {
+            const role = chat.isUser ? 'user' : 'assistant';
+            console.log(`Adding ${role} message:`, chat.message.substring(0, 50));
+
+            // Add message to UI without saving to Firebase (skipFirebase: true)
+            this.addMessage(chat.message, role, { skipFirebase: true, skipTypewriter: true });
+
+            // Add to conversation history for context
+            this.conversationHistory.push({
+                role: role,
+                content: chat.message
+            });
+        });
+
+        // Scroll to bottom
+        setTimeout(() => {
+            this.scrollToBottom();
+        }, 100);
+
+        console.log('Conversation loaded successfully');
     }
 
     // Code review functionality
@@ -711,6 +863,7 @@ class MobileParadoxGPT {
                     break;
                 case 'javascript':
                 case 'js':
+                case 'react':
                     codeBlocks.javascript.push(content);
                     break;
                 default:
@@ -742,6 +895,17 @@ class MobileParadoxGPT {
         if (content.includes('{') && content.includes('}') &&
             (content.includes(':') || content.includes('selector'))) {
             return 'css';
+        }
+
+        // React/JSX detection (check before general JavaScript)
+        if (content.includes('React') || content.includes('jsx') ||
+            content.includes('useState') || content.includes('useEffect') ||
+            content.includes('Component') || content.includes('props') ||
+            content.includes('return (') ||
+            (content.includes('<') && content.includes('/>')) ||
+            (content.includes('<') && content.includes('className')) ||
+            content.includes('export default') && content.includes('<')) {
+            return 'react';
         }
 
         // JavaScript detection
@@ -830,6 +994,374 @@ class MobileParadoxGPT {
 
         // Haptic feedback
         this.hapticFeedback('medium');
+    }
+
+    showReactPreview(codeId) {
+        const codeElement = document.getElementById(codeId);
+        if (!codeElement) return;
+
+        // Get the React component code
+        const reactCode = codeElement.textContent.trim();
+
+        // Collect all code blocks from the current message for CSS and additional JS
+        const messageElement = codeElement.closest('.message-mobile');
+        const codeBlocks = this.createMergedHTMLFromMessage(messageElement, codeElement);
+
+        // Create React preview HTML
+        const reactHTML = this.createReactPreviewDocument(reactCode, messageElement);
+
+        // Show in preview modal
+        this.showHTMLPreview(reactHTML);
+    }
+
+    createReactPreviewDocument(reactCode, messageElement) {
+        // Collect CSS from the message
+        let cssCode = '';
+        if (messageElement) {
+            messageElement.querySelectorAll('code').forEach(code => {
+                const language = this.detectLanguageFromCode(code);
+                if (language === 'css') {
+                    cssCode += code.textContent.trim() + '\n';
+                }
+            });
+        }
+
+        // Build React preview HTML
+        let html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>React Component Preview</title>
+
+    <!-- React CDN -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+    <!-- Babel for JSX transformation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Mobile-optimized styling -->
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 16px;
+            background: #f5f5f5;
+            line-height: 1.6;
+        }
+        #root {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            min-height: 200px;
+        }
+        .error {
+            color: #d32f2f;
+            background: #ffebee;
+            padding: 16px;
+            border-radius: 8px;
+            border-left: 4px solid #d32f2f;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        /* Custom CSS from code blocks */
+        ${cssCode}
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback, useMemo, useRef } = React;
+
+        try {
+            // Component code
+            ${reactCode}
+
+            // Default component if none defined
+            if (typeof App === 'undefined') {
+                function App() {
+                    return React.createElement('div', {
+                        style: {
+                            textAlign: 'center',
+                            padding: '40px 20px',
+                            color: '#666'
+                        }
+                    },
+                        React.createElement('h2', {
+                            style: {
+                                color: '#61dafb',
+                                marginBottom: '16px'
+                            }
+                        }, 'React Component Preview'),
+                        React.createElement('p', {}, 'Your React component will appear here.'),
+                        React.createElement('p', {
+                            style: {
+                                fontSize: '14px',
+                                marginTop: '20px'
+                            }
+                        }, 'Make sure your component is exported as "App" or define a default export.')
+                    );
+                }
+            }
+
+            // Render the component
+            const root = ReactDOM.createRoot(document.getElementById('root'));
+            root.render(React.createElement(App));
+
+        } catch (error) {
+            console.error('React component error:', error);
+            document.getElementById('root').innerHTML =
+                '<div class="error"><strong>Error:</strong> ' + error.message +
+                '<br><br><small>Make sure your React component is properly formatted and exported.</small></div>';
+        }
+    </script>
+</body>
+</html>`;
+
+        return html;
+    }
+
+    // Typing effect for mobile
+    startTypewriterEffect(messageContent, content, messageDiv, metadata) {
+        // Split content into chunks (text and code blocks)
+        const chunks = this.parseContentIntoChunks(content);
+        let currentChunkIndex = 0;
+
+        // Speed settings - optimized for mobile
+        const typeSpeed = 12; // milliseconds per character (slightly slower for mobile)
+        const codeTypeSpeed = 5; // faster for code
+        const chunkDelay = 100; // small delay between chunks
+
+        const typeNextChunk = () => {
+            if (currentChunkIndex >= chunks.length) {
+                // Remove cursor and typing class, then finalize message
+                messageContent.classList.remove('typewriter-cursor-mobile');
+                messageDiv.classList.remove('typing');
+                this.finalizeMessage(messageContent, content, messageDiv, metadata);
+                return;
+            }
+
+            const chunk = chunks[currentChunkIndex];
+
+            if (chunk.type === 'text') {
+                this.typeTextChunk(messageContent, chunk.content, () => {
+                    currentChunkIndex++;
+                    setTimeout(typeNextChunk, chunkDelay);
+                });
+            } else if (chunk.type === 'code') {
+                this.typeCodeChunk(messageContent, chunk.content, chunk.language, () => {
+                    currentChunkIndex++;
+                    setTimeout(typeNextChunk, chunkDelay);
+                });
+            } else {
+                // Other HTML elements - type as text
+                this.typeTextChunk(messageContent, chunk.content, () => {
+                    currentChunkIndex++;
+                    setTimeout(typeNextChunk, chunkDelay);
+                });
+            }
+        };
+
+        // Add cursor and typing class
+        messageContent.classList.add('typewriter-cursor-mobile');
+        messageDiv.classList.add('typing');
+        typeNextChunk();
+    }
+
+    typeTextChunk(messageContent, text, callback) {
+        let charIndex = 0;
+        const typeSpeed = 12;
+
+        // Process the text through markdown for proper formatting
+        const processedText = this.processMarkdown(text);
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = processedText;
+
+        // If it's just plain text, type it directly
+        if (tempDiv.textContent === text.trim()) {
+            const textNode = document.createTextNode('');
+            messageContent.appendChild(textNode);
+
+            const typeChar = () => {
+                if (charIndex < text.length) {
+                    textNode.textContent = text.substring(0, charIndex + 1);
+                    charIndex++;
+
+                    // Scroll to bottom during typing
+                    this.scrollToBottom();
+
+                    setTimeout(typeChar, typeSpeed);
+                } else {
+                    callback();
+                }
+            };
+
+            typeChar();
+        } else {
+            // For formatted text, add it instantly to preserve formatting
+            const wrapper = document.createElement('span');
+            wrapper.innerHTML = processedText;
+            messageContent.appendChild(wrapper);
+
+            // Small delay to simulate typing
+            setTimeout(callback, text.length * typeSpeed * 0.3);
+        }
+    }
+
+    typeCodeChunk(messageContent, codeContent, language, callback) {
+        // Create code block structure
+        const container = document.createElement('div');
+        container.className = 'code-block-container-mobile';
+
+        const controls = document.createElement('div');
+        controls.className = 'code-controls-mobile';
+        const codeId = 'code-' + Math.random().toString(36).substring(2, 9);
+
+        controls.innerHTML = `
+            <button onclick="window.mobileApp.copyCode('${codeId}')" title="Copy code">
+                <i class="fas fa-copy"></i> Copy
+            </button>
+        `;
+
+        const preElement = document.createElement('pre');
+        const codeElement = document.createElement('code');
+        codeElement.id = codeId;
+
+        if (language) {
+            codeElement.className = `language-${language}`;
+        }
+
+        // Add typing effect class
+        preElement.classList.add('typing-code-mobile');
+
+        preElement.appendChild(codeElement);
+        container.appendChild(controls);
+        container.appendChild(preElement);
+        messageContent.appendChild(container);
+
+        let charIndex = 0;
+        const codeTypeSpeed = 5;
+
+        const typeCodeChar = () => {
+            if (charIndex < codeContent.length) {
+                codeElement.textContent = codeContent.substring(0, charIndex + 1);
+
+                // Apply syntax highlighting periodically for performance
+                if (charIndex % 20 === 0 && window.hljs) {
+                    hljs.highlightElement(codeElement);
+                }
+
+                charIndex++;
+
+                // Scroll to bottom during typing
+                this.scrollToBottom();
+
+                setTimeout(typeCodeChar, codeTypeSpeed);
+            } else {
+                // Remove typing class and apply final highlighting
+                preElement.classList.remove('typing-code-mobile');
+                if (window.hljs) {
+                    hljs.highlightElement(codeElement);
+                }
+                callback();
+            }
+        };
+
+        typeCodeChar();
+    }
+
+    parseContentIntoChunks(content) {
+        const chunks = [];
+
+        // Split content by code blocks first
+        const codeBlockRegex = /```(\w+)?\n?([\s\S]*?)```/g;
+        let lastIndex = 0;
+        let match;
+
+        while ((match = codeBlockRegex.exec(content)) !== null) {
+            // Add text before code block
+            if (match.index > lastIndex) {
+                const textContent = content.substring(lastIndex, match.index);
+                if (textContent.trim()) {
+                    chunks.push({
+                        type: 'text',
+                        content: textContent
+                    });
+                }
+            }
+
+            // Add code block
+            chunks.push({
+                type: 'code',
+                language: match[1] || 'text',
+                content: match[2].trim()
+            });
+
+            lastIndex = match.index + match[0].length;
+        }
+
+        // Add remaining text
+        if (lastIndex < content.length) {
+            const textContent = content.substring(lastIndex);
+            if (textContent.trim()) {
+                chunks.push({
+                    type: 'text',
+                    content: textContent
+                });
+            }
+        }
+
+        return chunks;
+    }
+
+    finalizeMessage(messageContent, content, messageDiv, metadata) {
+        // Save to Firebase if user is authenticated
+        if (this.firebaseIntegration && this.firebaseIntegration.currentUser) {
+            console.log('Saving AI message to Firebase:', content.substring(0, 50));
+            this.firebaseIntegration.saveMessage(content, false);
+        }
+
+        // Apply final highlighting to all code blocks
+        if (window.hljs) {
+            messageContent.querySelectorAll('pre code').forEach(block => {
+                window.hljs.highlightElement(block);
+            });
+        }
+    }
+
+    addTypingIndicator() {
+        const indicator = document.createElement('div');
+        indicator.className = 'message-mobile assistant typing-indicator';
+        indicator.id = 'typingIndicator';
+
+        const content = document.createElement('div');
+        content.className = 'message-content-mobile';
+
+        const typingDiv = document.createElement('div');
+        typingDiv.className = 'typing-indicator-mobile';
+
+        const dotsDiv = document.createElement('div');
+        dotsDiv.className = 'typing-dots-mobile';
+        dotsDiv.innerHTML = '<span></span><span></span><span></span>';
+
+        typingDiv.appendChild(dotsDiv);
+        content.appendChild(typingDiv);
+        indicator.appendChild(content);
+
+        this.elements.chatContainerMobile.appendChild(indicator);
+        this.scrollToBottom();
+
+        return indicator;
+    }
+
+    removeTypingIndicator() {
+        const indicator = document.getElementById('typingIndicator');
+        if (indicator) {
+            indicator.remove();
+        }
     }
 
     showToast(message) {
@@ -959,4 +1491,147 @@ window.testMobileToast = function() {
     if (window.mobileApp) {
         window.mobileApp.showToast('Test toast notification!');
     }
+};
+
+window.testMobileConversationLoad = function() {
+    if (!window.mobileApp) {
+        console.error('Mobile app not initialized');
+        return;
+    }
+
+    // Create a test conversation
+    const testConversation = [
+        {
+            message: "Hello, can you help me create a simple HTML page?",
+            isUser: true,
+            timestamp: Date.now() - 60000 // 1 minute ago
+        },
+        {
+            message: "Of course! Here's a simple HTML page:\n\n```html\n<!DOCTYPE html>\n<html>\n<head>\n    <title>My Page</title>\n</head>\n<body>\n    <h1>Hello World!</h1>\n    <p>This is a simple HTML page.</p>\n</body>\n</html>\n```",
+            isUser: false,
+            timestamp: Date.now() - 30000 // 30 seconds ago
+        },
+        {
+            message: "Thanks! Can you add some CSS styling?",
+            isUser: true,
+            timestamp: Date.now() - 15000 // 15 seconds ago
+        },
+        {
+            message: "Sure! Here's the same page with CSS styling:\n\n```html\n<!DOCTYPE html>\n<html>\n<head>\n    <title>Styled Page</title>\n    <style>\n        body { font-family: Arial, sans-serif; margin: 40px; }\n        h1 { color: #333; }\n        p { color: #666; line-height: 1.6; }\n    </style>\n</head>\n<body>\n    <h1>Hello World!</h1>\n    <p>This is a beautifully styled HTML page.</p>\n</body>\n</html>\n```",
+            isUser: false,
+            timestamp: Date.now()
+        }
+    ];
+
+    console.log('Loading test conversation...');
+    window.mobileApp.loadChatConversation(testConversation);
+};
+
+window.testMobileTyping = function() {
+    if (!window.mobileApp) {
+        console.error('Mobile app not initialized');
+        return;
+    }
+
+    const testMessage = `Here's a sample response with typing effect!
+
+This message will appear character by character, just like in ChatGPT.
+
+\`\`\`javascript
+function greet(name) {
+    console.log("Hello, " + name + "!");
+    return "Welcome to ParadoxGPT!";
+}
+
+greet("Mobile User");
+\`\`\`
+
+The typing effect works for both text and code blocks, making the mobile experience feel more interactive and engaging.`;
+
+    console.log('Testing mobile typing effect...');
+    window.mobileApp.addMessage(testMessage, 'assistant');
+};
+
+window.testMobileReactPreview = function() {
+    if (!window.mobileApp) {
+        console.error('Mobile app not initialized');
+        return;
+    }
+
+    const testReactCode = `function App() {
+    const [count, setCount] = useState(0);
+    const [name, setName] = useState('React User');
+
+    return (
+        <div style={{ padding: '20px', textAlign: 'center' }}>
+            <h1 style={{ color: '#61dafb' }}>Hello, {name}!</h1>
+            <p>You clicked {count} times</p>
+            <button
+                onClick={() => setCount(count + 1)}
+                style={{
+                    background: '#61dafb',
+                    color: 'white',
+                    border: 'none',
+                    padding: '10px 20px',
+                    borderRadius: '5px',
+                    cursor: 'pointer',
+                    margin: '10px'
+                }}
+            >
+                Click me!
+            </button>
+            <br />
+            <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Enter your name"
+                style={{
+                    padding: '8px',
+                    borderRadius: '4px',
+                    border: '1px solid #ccc',
+                    margin: '10px'
+                }}
+            />
+        </div>
+    );
+}
+
+export default App;`;
+
+    console.log('Testing mobile React preview...');
+    const reactHTML = window.mobileApp.createReactPreviewDocument(testReactCode, null);
+    window.mobileApp.showHTMLPreview(reactHTML);
+};
+
+window.checkMobileElements = function() {
+    if (!window.mobileApp) {
+        console.error('Mobile app not initialized');
+        return;
+    }
+
+    console.log('=== Mobile Elements Check ===');
+    const elements = window.mobileApp.elements;
+
+    Object.keys(elements).forEach(key => {
+        const element = elements[key];
+        if (element) {
+            console.log(`✅ ${key}: Found`);
+        } else {
+            console.error(`❌ ${key}: Missing!`);
+        }
+    });
+
+    // Check if Firebase is working
+    console.log('Firebase Integration:', window.mobileApp.firebaseIntegration ? '✅ Active' : '❌ Missing');
+
+    // Check if preview modal exists
+    const previewModal = document.getElementById('previewModalMobile');
+    console.log('Preview Modal:', previewModal ? '✅ Found' : '❌ Missing');
+
+    // Check if CSS is loaded
+    const computedStyle = getComputedStyle(document.body);
+    console.log('CSS Variables:', computedStyle.getPropertyValue('--accent-color') ? '✅ Loaded' : '❌ Missing');
+
+    console.log('============================');
 };

@@ -1134,8 +1134,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     controls.appendChild(previewBtn);
                 }
 
+                // Check if it's React/JSX code
+                const isReact = language && (language[1] === 'jsx' || language[1] === 'tsx' || language[1] === 'react') ||
+                               detectCodeLanguage(codeBlock, codeBlock.textContent) === 'react';
+
+                if (isReact) {
+                    const previewBtn = document.createElement('button');
+                    previewBtn.innerHTML = '<i class="fab fa-react"></i> Preview React';
+                    previewBtn.className = 'preview-button react-preview';
+                    previewBtn.title = 'Preview React component';
+                    previewBtn.addEventListener('click', () => {
+                        showReactPreview(codeBlock, messageDiv);
+                    });
+                    controls.appendChild(previewBtn);
+                }
+
                 // Add preview button for any code block that might be part of a web project
-                if (!isHTML && (language && (language[1] === 'css' || language[1] === 'javascript'))) {
+                if (!isHTML && !isReact && (language && (language[1] === 'css' || language[1] === 'javascript'))) {
                     const previewBtn = document.createElement('button');
                     previewBtn.innerHTML = '<i class="fas fa-play"></i> Run All';
                     previewBtn.className = 'preview-button';
@@ -1469,8 +1484,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     controls.appendChild(previewBtn);
                 }
 
+                // Check if it's React/JSX code
+                const isReact = language && (language[1] === 'jsx' || language[1] === 'tsx' || language[1] === 'react') ||
+                               detectCodeLanguage(codeBlock, codeBlock.textContent) === 'react';
+
+                if (isReact) {
+                    const previewBtn = document.createElement('button');
+                    previewBtn.innerHTML = '<i class="fab fa-react"></i> Preview React';
+                    previewBtn.className = 'preview-button react-preview';
+                    previewBtn.title = 'Preview React component';
+                    previewBtn.addEventListener('click', () => {
+                        showReactPreview(codeBlock, messageDiv);
+                    });
+                    controls.appendChild(previewBtn);
+                }
+
                 // Add preview button for any code block that might be part of a web project
-                if (!isHTML && (language && (language[1] === 'css' || language[1] === 'javascript'))) {
+                if (!isHTML && !isReact && (language && (language[1] === 'css' || language[1] === 'javascript'))) {
                     const previewBtn = document.createElement('button');
                     previewBtn.innerHTML = '<i class="fas fa-play"></i> Run All';
                     previewBtn.className = 'preview-button';
@@ -1539,6 +1569,131 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 2000);
     }
 
+    function showReactPreview(triggerCodeBlock, messageElement = null) {
+        // Collect code blocks from specific message or entire conversation
+        const codeBlocks = messageElement ?
+            collectCodeBlocksFromMessage(messageElement) :
+            collectCodeBlocksFromConversation();
+
+        // Create a React preview HTML document
+        const reactHTML = createReactPreviewDocument(codeBlocks, triggerCodeBlock);
+
+        // Create a blob URL for the HTML content
+        const blob = new Blob([reactHTML], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+
+        // Set the iframe source
+        previewFrame.src = url;
+
+        // Show the modal with animation
+        showModal(previewModal);
+
+        // Clean up the blob URL after a delay
+        setTimeout(() => {
+            URL.revokeObjectURL(url);
+        }, 2000);
+    }
+
+    function createReactPreviewDocument(codeBlocks, triggerCodeBlock) {
+        const triggerContent = triggerCodeBlock ? triggerCodeBlock.textContent.trim() : '';
+
+        // Build a complete HTML document with React support
+        let html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>React Component Preview</title>
+
+    <!-- React CDN -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+    <!-- Babel for JSX transformation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Basic styling -->
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        #root {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            min-height: 200px;
+        }
+        .error {
+            color: #d32f2f;
+            background: #ffebee;
+            padding: 16px;
+            border-radius: 4px;
+            border-left: 4px solid #d32f2f;
+            margin: 10px 0;
+        }
+`;
+
+        // Add CSS from code blocks
+        if (codeBlocks.css && codeBlocks.css.length > 0) {
+            codeBlocks.css.forEach(css => {
+                html += css + '\n';
+            });
+        }
+
+        html += `
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback, useMemo, useRef } = React;
+
+        try {
+            // Component code
+`;
+
+        // Add React component code
+        if (codeBlocks.javascript && codeBlocks.javascript.length > 0) {
+            codeBlocks.javascript.forEach(js => {
+                html += js + '\n\n';
+            });
+        } else if (triggerContent) {
+            html += triggerContent + '\n\n';
+        }
+
+        // Add default component if none found
+        html += `
+            // Default component if none defined
+            if (typeof App === 'undefined') {
+                function App() {
+                    return React.createElement('div', {},
+                        React.createElement('h1', {}, 'React Component Preview'),
+                        React.createElement('p', {}, 'Your React component will appear here.')
+                    );
+                }
+            }
+
+            // Render the component
+            const root = ReactDOM.createRoot(document.getElementById('root'));
+            root.render(React.createElement(App));
+
+        } catch (error) {
+            console.error('React component error:', error);
+            document.getElementById('root').innerHTML =
+                '<div class="error"><strong>Error:</strong> ' + error.message + '</div>';
+        }
+    </script>
+</body>
+</html>`;
+
+        return html;
+    }
+
     function collectCodeBlocksFromConversation() {
         const messages = chatContainer.querySelectorAll('.message');
         const codeBlocks = {
@@ -1558,7 +1713,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     codeBlocks.html.push(content);
                 } else if (language === 'css') {
                     codeBlocks.css.push(content);
-                } else if (language === 'javascript') {
+                } else if (language === 'javascript' || language === 'react') {
                     codeBlocks.javascript.push(content);
                 } else {
                     codeBlocks.other.push({ language, content });
@@ -1586,7 +1741,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 codeBlocks.html.push(content);
             } else if (language === 'css') {
                 codeBlocks.css.push(content);
-            } else if (language === 'javascript') {
+            } else if (language === 'javascript' || language === 'react') {
                 codeBlocks.javascript.push(content);
             } else {
                 codeBlocks.other.push({ language, content });
@@ -1694,6 +1849,20 @@ document.addEventListener('DOMContentLoaded', () => {
             lowerContent.includes('create table') ||
             lowerContent.includes('alter table')) {
             return 'sql';
+        }
+
+        // React/JSX detection (check before general JavaScript)
+        if (lowerContent.includes('react') ||
+            lowerContent.includes('jsx') ||
+            lowerContent.includes('usestate') ||
+            lowerContent.includes('useeffect') ||
+            lowerContent.includes('component') ||
+            lowerContent.includes('props') ||
+            lowerContent.includes('return (') ||
+            (lowerContent.includes('<') && lowerContent.includes('/>')) ||
+            (lowerContent.includes('<') && lowerContent.includes('className')) ||
+            lowerContent.includes('export default') && lowerContent.includes('<')) {
+            return 'react';
         }
 
         // JavaScript detection
@@ -1931,4 +2100,86 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize send button state
     updateSendButtonState();
+
+    // Make functions globally available for debugging
+    window.collectCodeBlocks = collectCodeBlocksFromConversation;
+    window.showHTMLPreview = showHTMLPreview;
+    window.showReactPreview = showReactPreview;
+
+    window.testReactPreview = function() {
+        const testReactCode = `function App() {
+    const [count, setCount] = useState(0);
+    const [message, setMessage] = useState('Hello React!');
+
+    return (
+        <div style={{ padding: '30px', textAlign: 'center', fontFamily: 'Arial' }}>
+            <h1 style={{ color: '#61dafb', marginBottom: '20px' }}>{message}</h1>
+            <div style={{ marginBottom: '20px' }}>
+                <p style={{ fontSize: '18px' }}>Counter: <strong>{count}</strong></p>
+                <button
+                    onClick={() => setCount(count + 1)}
+                    style={{
+                        background: 'linear-gradient(135deg, #61dafb, #21d4fd)',
+                        color: 'white',
+                        border: 'none',
+                        padding: '12px 24px',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontSize: '16px',
+                        margin: '5px'
+                    }}
+                >
+                    Increment
+                </button>
+                <button
+                    onClick={() => setCount(count - 1)}
+                    style={{
+                        background: 'linear-gradient(135deg, #ff6b6b, #ee5a52)',
+                        color: 'white',
+                        border: 'none',
+                        padding: '12px 24px',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontSize: '16px',
+                        margin: '5px'
+                    }}
+                >
+                    Decrement
+                </button>
+            </div>
+            <div>
+                <input
+                    type="text"
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    placeholder="Enter a message"
+                    style={{
+                        padding: '10px',
+                        borderRadius: '6px',
+                        border: '2px solid #61dafb',
+                        fontSize: '16px',
+                        width: '250px',
+                        marginBottom: '10px'
+                    }}
+                />
+            </div>
+        </div>
+    );
+}
+
+export default App;`;
+
+        console.log('Testing React preview...');
+        const codeBlocks = { javascript: [testReactCode], css: [], html: [], other: [] };
+        const reactHTML = createReactPreviewDocument(codeBlocks, { textContent: testReactCode });
+
+        const blob = new Blob([reactHTML], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        previewFrame.src = url;
+        showModal(previewModal);
+
+        setTimeout(() => {
+            URL.revokeObjectURL(url);
+        }, 2000);
+    };
 });

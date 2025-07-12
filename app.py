@@ -194,7 +194,13 @@ def get_chat_history():
     """Get user's chat history"""
     try:
         limit = request.args.get('limit', 50, type=int)
-        chats = get_user_chats(request.user['uid'], limit)
+        user_id = request.user['uid']
+
+        logger.info(f"Chat history request from user: {user_id}, limit: {limit}")
+
+        chats = get_user_chats(user_id, limit)
+
+        logger.info(f"Retrieved {len(chats)} chats for user {user_id}")
 
         return jsonify({
             'success': True,
@@ -204,6 +210,8 @@ def get_chat_history():
 
     except Exception as e:
         logger.error(f"Error getting chat history: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/user/stats', methods=['GET'])

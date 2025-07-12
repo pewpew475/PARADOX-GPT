@@ -123,31 +123,54 @@ class FirebaseAdminService:
     def get_user_chats(self, user_id, limit=50):
         """Get user's chat history that hasn't expired"""
         if not self.initialized:
+            logger.warning("Firebase not initialized, returning empty chats")
             return []
 
         try:
+            logger.info(f"Getting chats for user: {user_id}")
+
             # Use a simple query that doesn't require composite indexes
             chats_ref = self.db.collection('chats')
             query = chats_ref.where('userId', '==', user_id).limit(limit * 2)  # Get more to filter
 
             docs = query.stream()
-            chats = []
+            all_chats = []
+            valid_chats = []
             now = datetime.now()
+
+            logger.info(f"Current time for expiry check: {now}")
 
             for doc in docs:
                 chat_data = doc.to_dict()
                 chat_data['id'] = doc.id
+                all_chats.append(chat_data)
+
+                logger.debug(f"Chat doc: {doc.id}, userId: {chat_data.get('userId')}, expiresAt: {chat_data.get('expiresAt')}")
 
                 # Filter out expired chats on the server side
-                if 'expiresAt' in chat_data and chat_data['expiresAt'] > now:
-                    chats.append(chat_data)
+                if 'expiresAt' in chat_data:
+                    expires_at = chat_data['expiresAt']
+                    if expires_at > now:
+                        valid_chats.append(chat_data)
+                        logger.debug(f"Chat {doc.id} is valid (expires: {expires_at})")
+                    else:
+                        logger.debug(f"Chat {doc.id} is expired (expires: {expires_at})")
+                else:
+                    logger.warning(f"Chat {doc.id} has no expiresAt field")
+
+            logger.info(f"Found {len(all_chats)} total chats, {len(valid_chats)} valid chats")
 
             # Sort by timestamp (most recent first) and limit
-            chats.sort(key=lambda x: x.get('timestamp', datetime.min), reverse=True)
-            return chats[:limit]
+            valid_chats.sort(key=lambda x: x.get('timestamp', datetime.min), reverse=True)
+            result = valid_chats[:limit]
+
+            logger.info(f"Returning {len(result)} chats after sorting and limiting")
+            return result
 
         except Exception as e:
             logger.error(f"Error getting user chats: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return []
 
     def save_chat_message(self, user_id, message, is_user=True):

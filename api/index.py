@@ -102,9 +102,8 @@ def detect_content_type(content):
     # Default to text
     return 'text'
 
-# This is the entry point for Vercel
-def handler(request):
-    return app(request.environ, lambda status, headers: None)
+# This is the entry point for Vercel - Flask app should be exposed as 'app'
+# No handler function needed for WSGI applications
 
 if __name__ == '__main__':
     app.run(debug=True)

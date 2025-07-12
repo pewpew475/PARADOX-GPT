@@ -165,12 +165,8 @@ def home():
             is_mobile = is_mobile_device(user_agent)
             detection_method = 'auto_detected'
 
-        # Enhanced logging for debugging
-        logger.info(f"=== Device Detection Debug ===")
-        logger.info(f"User Agent: {user_agent}")
-        logger.info(f"Is Mobile: {is_mobile}")
-        logger.info(f"Detection Method: {detection_method}")
-        logger.info(f"==============================")
+        # Log device detection
+        logger.info(f"Device detection - Is Mobile: {is_mobile} ({detection_method})")
 
         # Serve appropriate template based on device
         if is_mobile:

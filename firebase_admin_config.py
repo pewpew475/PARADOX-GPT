@@ -126,23 +126,25 @@ class FirebaseAdminService:
             return []
 
         try:
-            # Query for non-expired chats
+            # Use a simple query that doesn't require composite indexes
             chats_ref = self.db.collection('chats')
-            query = chats_ref.where('userId', '==', user_id)\
-                            .where('expiresAt', '>', datetime.now())\
-                            .order_by('expiresAt')\
-                            .order_by('timestamp')\
-                            .limit(limit)
+            query = chats_ref.where('userId', '==', user_id).limit(limit * 2)  # Get more to filter
 
             docs = query.stream()
             chats = []
-            
+            now = datetime.now()
+
             for doc in docs:
                 chat_data = doc.to_dict()
                 chat_data['id'] = doc.id
-                chats.append(chat_data)
 
-            return chats
+                # Filter out expired chats on the server side
+                if 'expiresAt' in chat_data and chat_data['expiresAt'] > now:
+                    chats.append(chat_data)
+
+            # Sort by timestamp (most recent first) and limit
+            chats.sort(key=lambda x: x.get('timestamp', datetime.min), reverse=True)
+            return chats[:limit]
 
         except Exception as e:
             logger.error(f"Error getting user chats: {e}")

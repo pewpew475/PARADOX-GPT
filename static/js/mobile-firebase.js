@@ -237,30 +237,90 @@ class MobileFirebaseIntegration {
     }
     
     async loadUserChats() {
-        if (!this.currentUser) return;
-        
+        if (!this.currentUser) {
+            console.log('No current user, skipping chat history load');
+            return;
+        }
+
+        console.log('Loading chat history for user:', this.currentUser.email);
+
         try {
+            // Get ID token for authentication
+            console.log('Getting ID token...');
+            const token = await this.currentUser.getIdToken();
+            console.log('Token obtained, making API request...');
+
             const response = await fetch('/api/chat/history?limit=20', {
+                method: 'GET',
                 headers: {
-                    'Authorization': `Bearer ${await this.currentUser.getIdToken()}`
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
                 }
             });
-            
+
+            console.log('API response status:', response.status);
+            console.log('API response ok:', response.ok);
+
             if (response.ok) {
                 const data = await response.json();
-                if (data.success) {
+                console.log('API response data:', data);
+
+                if (data.success && data.chats) {
+                    console.log(`Loaded ${data.chats.length} chats from backend`);
+                    console.log('Sample chat data:', data.chats.slice(0, 2)); // Show first 2 chats
                     this.mobileApp.loadChatHistory(data.chats);
+                } else {
+                    console.log('No chats found or error from backend:', data);
+                    this.mobileApp.loadChatHistory([]);
                 }
+            } else {
+                const errorText = await response.text();
+                console.error('Failed to load chats from backend:', response.status, errorText);
+                this.mobileApp.loadChatHistory([]);
             }
         } catch (error) {
             console.error('Error loading chat history:', error);
+            // Fallback: show empty history
+            this.mobileApp.loadChatHistory([]);
         }
     }
     
+    async saveMessage(message, isUser = true) {
+        if (!this.currentUser) {
+            console.log('No current user, skipping Firebase save');
+            return { success: false, error: 'No authenticated user' };
+        }
+
+        try {
+            const { collection, addDoc, serverTimestamp, Timestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+            const chatData = {
+                userId: this.currentUser.uid,
+                message: message,
+                isUser: isUser,
+                timestamp: serverTimestamp(),
+                expiresAt: Timestamp.fromDate(new Date(Date.now() + 6 * 60 * 60 * 1000)) // 6 hours from now
+            };
+
+            const docRef = await addDoc(collection(this.db, 'chats'), chatData);
+            console.log('Message saved to Firebase with ID:', docRef.id);
+
+            // Refresh chat history after saving
+            setTimeout(() => {
+                this.loadUserChats();
+            }, 500);
+
+            return { success: true, id: docRef.id };
+        } catch (error) {
+            console.error('Error saving message to Firebase:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
     clearChats() {
         this.mobileApp.loadChatHistory([]);
     }
-    
+
     destroy() {
         if (this.authUnsubscribe) {
             this.authUnsubscribe();
@@ -270,3 +330,67 @@ class MobileFirebaseIntegration {
 
 // Make available globally
 window.MobileFirebaseIntegration = MobileFirebaseIntegration;
+
+// Add debugging functions for mobile
+window.checkMobileChatHistory = function() {
+    console.log('=== Mobile Chat History Debug ===');
+    console.log('Current user:', window.mobileFirebaseIntegration?.currentUser?.email);
+    console.log('Chat history container:', document.getElementById('chatHistoryMobile'));
+    console.log('Chat history content:', document.getElementById('chatHistoryMobile')?.innerHTML);
+
+    if (window.mobileFirebaseIntegration?.currentUser) {
+        console.log('Manually triggering mobile chat history load...');
+        window.mobileFirebaseIntegration.loadUserChats();
+    } else {
+        console.log('User not signed in');
+    }
+};
+
+window.testMobileChatAPI = async function() {
+    if (!window.mobileFirebaseIntegration?.currentUser) {
+        console.log('No user signed in');
+        return;
+    }
+
+    try {
+        console.log('=== Testing Mobile Chat History API ===');
+        const token = await window.mobileFirebaseIntegration.currentUser.getIdToken();
+        console.log('Token length:', token.length);
+
+        const response = await fetch('/api/chat/history?limit=20', {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        console.log('Response status:', response.status);
+        console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
+        const text = await response.text();
+        console.log('Raw response:', text);
+
+        try {
+            const data = JSON.parse(text);
+            console.log('Parsed response:', data);
+        } catch (e) {
+            console.log('Response is not JSON');
+        }
+
+    } catch (error) {
+        console.error('Mobile API test failed:', error);
+    }
+};
+
+window.testMobileChatSave = function() {
+    if (window.mobileFirebaseIntegration?.currentUser) {
+        console.log('Testing mobile chat save...');
+        window.mobileFirebaseIntegration.saveMessage('Test message from mobile user', true);
+        setTimeout(() => {
+            window.mobileFirebaseIntegration.saveMessage('Test response from mobile AI', false);
+        }, 1000);
+    } else {
+        console.log('User not signed in - cannot test mobile chat save');
+    }
+};

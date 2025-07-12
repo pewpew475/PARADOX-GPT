@@ -202,6 +202,8 @@ class MobileParadoxGPT {
         // Initialize mobile Firebase integration
         if (window.MobileFirebaseIntegration) {
             this.firebaseIntegration = new window.MobileFirebaseIntegration(this);
+            // Make it globally accessible for debugging
+            window.mobileFirebaseIntegration = this.firebaseIntegration;
         }
     }
     
@@ -209,7 +211,13 @@ class MobileParadoxGPT {
         this.elements.mobileSidebar.classList.add('open');
         this.elements.mobileOverlay.classList.add('show');
         document.body.style.overflow = 'hidden';
-        
+
+        // Refresh chat history when sidebar opens
+        if (this.firebaseIntegration && this.firebaseIntegration.currentUser) {
+            console.log('Sidebar opened, refreshing chat history...');
+            this.firebaseIntegration.loadUserChats();
+        }
+
         // Haptic feedback
         this.hapticFeedback('light');
     }
@@ -442,6 +450,13 @@ class MobileParadoxGPT {
             contentDiv.innerHTML = this.processMarkdown(content);
         }
 
+        // Save to Firebase if user is authenticated (only for new messages, not restored ones)
+        if (this.firebaseIntegration && this.firebaseIntegration.currentUser && !metadata?.skipFirebase) {
+            const isUser = role === 'user';
+            console.log('Saving message to Firebase:', { content: content.substring(0, 50), isUser });
+            this.firebaseIntegration.saveMessage(content, isUser);
+        }
+
         messageDiv.appendChild(contentDiv);
         this.elements.chatContainerMobile.appendChild(messageDiv);
 
@@ -512,12 +527,23 @@ class MobileParadoxGPT {
 
     // Load chat history
     loadChatHistory(chats) {
+        console.log('loadChatHistory called with:', chats?.length || 0, 'chats');
+        console.log('Chat history container:', this.elements.chatHistoryMobile);
+
+        if (!this.elements.chatHistoryMobile) {
+            console.error('Chat history container not found!');
+            return;
+        }
+
         this.elements.chatHistoryMobile.innerHTML = '';
 
         if (!chats || chats.length === 0) {
+            console.log('No chats to display, showing empty message');
             this.elements.chatHistoryMobile.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 2rem;">No chat history yet</p>';
             return;
         }
+
+        console.log('Displaying', chats.length, 'chats');
 
         chats.forEach(chat => {
             const chatItem = document.createElement('div');
